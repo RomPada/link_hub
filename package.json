@@ -1,0 +1,17 @@
+{
+  "name": "linkhub",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Single-page link hub with source and outbound analytics on Cloudflare Workers and D1",
+  "scripts": {
+    "dev": "wrangler dev",
+    "db:local": "wrangler d1 migrations apply linkhub-db --local",
+    "db:remote": "wrangler d1 migrations apply linkhub-db --remote",
+    "deploy": "wrangler deploy",
+    "test": "node --test tests/*.test.js"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}
