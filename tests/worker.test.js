@@ -5,7 +5,7 @@ import worker, { isValidSlug, validHttpUrl, periodStart, deviceType } from '../s
 const NOW = new Date('2026-10-30T10:15:00Z').getTime();
 
 test('slug validation rejects routes reserved for the app', () => {
-  assert.equal(isValidSlug('instagram'), true);
+  assert.equal(isValidSlug('source-one'), true);
   assert.equal(isValidSlug('go'), false);
   assert.equal(isValidSlug('admin'), false);
   assert.equal(isValidSlug('my-campaign_1'), true);
@@ -13,7 +13,7 @@ test('slug validation rejects routes reserved for the app', () => {
 });
 
 test('external destinations permit only http(s) URLs without credentials', () => {
-  assert.equal(validHttpUrl('https://www.patreon.com/creator'), true);
+  assert.equal(validHttpUrl('https://example.com/creator'), true);
   assert.equal(validHttpUrl('javascript:alert(1)'), false);
   assert.equal(validHttpUrl('https://user:secret@example.com/'), false);
 });
@@ -32,8 +32,8 @@ test('device classification does not store user agent strings', () => {
 });
 
 function makeEnvironment(events) {
-  const sources = [ { id: 1, name: 'Instagram', slug: 'ig' } ];
-  const buttons = [ { id: 4, title: 'Patreon', url: 'https://patreon.com/example', active: 1 } ];
+  const sources = [ { id: 1, name: 'Source One', slug: 'source-one' } ];
+  const buttons = [ { id: 4, title: 'Example Resource One', url: 'https://example.com/resource-one', active: 1 } ];
   const DB = {
     prepare(sql) {
       const context = { args: [], bind(...args) { this.args = args; return this; },
@@ -62,14 +62,14 @@ function waitContext() {
 
 test('source URL renders the hub and records an attributed page view', async () => {
   const events = [], ctx = waitContext();
-  const res = await worker.fetch(request('/ig'), makeEnvironment(events), ctx);
+  const res = await worker.fetch(request('/source-one'), makeEnvironment(events), ctx);
   await Promise.all(ctx.tasks);
   assert.equal(res.status, 200);
   assert.equal((await res.text()).includes('<html'), true);
   assert.equal(events.length, 1);
   assert.equal(events[0][0], 'view');
   assert.equal(events[0][1], 1);
-  assert.equal(events[0][2], 'Instagram');
+  assert.equal(events[0][2], 'Source One');
   assert.match(res.headers.get('set-cookie'), /lh_visitor=/);
 });
 
@@ -84,7 +84,7 @@ test('root visits are recorded as Direct; admin login page is not tracked', asyn
 
 test('known preview bots do not count as real visits', async () => {
   const events = [], ctx = waitContext();
-  await worker.fetch(request('/ig', { headers: { 'User-Agent': 'facebookexternalhit/1.1' } }), makeEnvironment(events), ctx);
+  await worker.fetch(request('/source-one', { headers: { 'User-Agent': 'facebookexternalhit/1.1' } }), makeEnvironment(events), ctx);
   await Promise.all(ctx.tasks);
   assert.equal(events.length, 0);
 });
@@ -94,16 +94,16 @@ test('clicks on destination buttons redirect and record an outbound event', asyn
   const res = await worker.fetch(request('/out/4', { headers: { 'Cookie': 'lh_source=1' } }), makeEnvironment(events), ctx);
   await Promise.all(ctx.tasks);
   assert.equal(res.status, 302);
-  assert.equal(res.headers.get('Location'), 'https://patreon.com/example');
+  assert.equal(res.headers.get('Location'), 'https://example.com/resource-one');
   assert.equal(events.length, 1);
   assert.equal(events[0][0], 'outbound');
-  assert.equal(events[0][2], 'Instagram');
+  assert.equal(events[0][2], 'Source One');
   assert.equal(events[0][3], 4);
 });
 
 test('HEAD does not record a page view or outbound click', async () => {
   const events=[],ctx=waitContext(),env=makeEnvironment(events);
-  const page=await worker.fetch(request('/ig',{method:'HEAD'}),env,ctx);
+  const page=await worker.fetch(request('/source-one',{method:'HEAD'}),env,ctx);
   const out=await worker.fetch(request('/out/4',{method:'HEAD'}),env,ctx);
   await Promise.all(ctx.tasks);
   assert.equal(page.status,200);

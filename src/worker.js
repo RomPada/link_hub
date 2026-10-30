@@ -1,4 +1,4 @@
-/** LinkHub v0.1.0 — one Cloudflare Worker + D1 + static assets.
+/** LinkHub v0.2.0 — one Cloudflare Worker + D1 + static assets.
  * Analytics counts page visits and outbound button clicks separately.
  * No raw IP addresses or HTTP referrers are stored.
  */
@@ -8,7 +8,7 @@ const VISITOR_COOKIE = 'lh_visitor';
 const SOURCE_COOKIE = 'lh_source';
 const WEEK_MS = 7 * 86400000;
 const SESSION_TTL = WEEK_MS;
-const RESERVED = new Set(['admin', 'api', 'out', 'login', 'demo', 'go', 'favicon', 'manifest', 'icon', 'robots', 'index', 'assets']);
+const RESERVED = new Set(['admin', 'api', 'out', 'login', 'demo', 'go', 'favicon', 'manifest', 'icon', 'robots', 'index', 'assets', 'site-icon']);
 const NAV_BOTS = /bot|crawl|spider|slurp|preview|facebookexternalhit|twitterbot|telegrambot|discordbot|whatsapp|linkedinbot|pinterest|headless|lighthouse|google-inspectiontool/i;
 const VALID_SLUG = /^[a-z][a-z0-9_-]{0,39}$/;
 const COLOR_CHOICES = new Set(['#e9eefc','#f9e8e7','#f9edd7','#e4f0e9','#ede8f9','#e8f3f5','#f2ece6','#f5e9f1']);
@@ -66,15 +66,41 @@ function apiOriginAllowed(request) {
   const origin = request.headers.get('Origin');
   return origin === new URL(request.url).origin;
 }
-async function bodyJson(request) {
-  if ((Number(request.headers.get('Content-Length') || 0)) > 16384) throw new Error('Request is too large');
+async function bodyJson(request, maximum = 16384) {
+  if ((Number(request.headers.get('Content-Length') || 0)) > maximum) throw new Error('Request is too large');
   const raw = await request.text();
-  if (raw.length > 16384) throw new Error('Request is too large');
+  if (raw.length > maximum) throw new Error('Request is too large');
   try { return JSON.parse(raw); } catch { throw new Error('Invalid JSON'); }
 }
 function text(value, max = 100) { return String(value ?? '').trim().slice(0, max); }
 function safeColor(value) { return COLOR_CHOICES.has(value) ? value : '#e9eefc'; }
-function bool(value) { return value ? 1 : 0; }
+function bool(value) { return value === true || value === 'on' || value === 1 || value === '1' ? 1 : 0; }
+function safeFavicon(value) {
+  if (value === '') return '';
+  if (typeof value !== 'string' || value.length > 85000) throw new Error('Favicon is too large (max 60 KB)');
+  const match = /^data:image\/(png|webp|x-icon|vnd\.microsoft\.icon);base64,([a-zA-Z0-9+/]+={0,2})$/.exec(value);
+  if (!match) throw new Error('Use a PNG, WebP or ICO file for the favicon');
+  let bytes;
+  try { bytes = atob(match[2]); } catch { throw new Error('Invalid favicon image'); }
+  if (bytes.length > 61440 || !bytes.length) throw new Error('Favicon is too large (max 60 KB)');
+  const signature = [...bytes.slice(0, 12)].map(c => c.charCodeAt(0));
+  const png = signature.slice(0,8).join(',') === '137,80,78,71,13,10,26,10';
+  const ico = signature.slice(0,4).join(',') === '0,0,1,0';
+  const webp = bytes.startsWith('RIFF') && bytes.slice(8, 12) === 'WEBP';
+  if (!(png || ico || webp)) throw new Error('Invalid favicon file signature');
+  return value;
+}
+async function siteIcon(request, env) {
+  const row = await env.DB.prepare('SELECT favicon_data FROM settings WHERE id=1').first();
+  if (!row?.favicon_data) return env.ASSETS.fetch(new Request(new URL(new URL(request.url).pathname === '/favicon.ico' ? '/favicon.ico' : '/icon.svg', request.url), request));
+  const data = safeFavicon(row.favicon_data);
+  const match = /^data:(image\/[^;]+);base64,(.*)$/.exec(data);
+  const decoded = atob(match[2]);
+  const bytes = Uint8Array.from(decoded, char => char.charCodeAt(0));
+  return new Response(request.method === 'HEAD' ? null : bytes, {
+    headers: { 'Content-Type': match[1], 'Cache-Control': 'no-cache', 'X-Content-Type-Options':'nosniff' }
+  });
+}
 function toHex(buffer) { return [...new Uint8Array(buffer)].map((v) => v.toString(16).padStart(2, '0')).join(''); }
 async function sha256(value) { return toHex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))); }
 async function hmacHex(secret, value) {
@@ -175,7 +201,7 @@ async function goOutbound(request, env, ctx, identifier) {
 }
 async function publicData(env) {
   const [profile, links] = await Promise.all([
-    env.DB.prepare('SELECT display_name,headline,bio,avatar_url,accent_color FROM settings WHERE id=1').first(),
+    env.DB.prepare('SELECT display_name,headline,bio,avatar_url,accent_color,avatar_text,avatar_background,avatar_shape,show_top_brand,show_top_tagline,updated_at FROM settings WHERE id=1').first(),
     env.DB.prepare('SELECT id,title,subtitle,category,accent FROM buttons WHERE active=1 ORDER BY sort_order ASC,id ASC').all()
   ]);
   return json({ profile, links: links.results });
@@ -186,9 +212,15 @@ function verifyAdminPayload(path, method, data) {
     const headline = text(data.headline, 140);
     const bio = text(data.bio, 300);
     const avatar_url = text(data.avatar_url, 700);
+    const avatar_text = text(data.avatar_text, 8);
+    const avatar_background = /^#[a-fA-F0-9]{6}$/.test(data.avatar_background) ? data.avatar_background : '#142849';
+    const avatar_shape = ['rounded','square','circle'].includes(data.avatar_shape) ? data.avatar_shape : 'rounded';
+    const show_top_brand = bool(data.show_top_brand);
+    const show_top_tagline = bool(data.show_top_tagline);
+    const favicon_data = safeFavicon(data.favicon_data ?? '');
     const accent_color = /^#[a-fA-F0-9]{6}$/.test(data.accent_color) ? data.accent_color : '#4267e9';
     if (!display_name || (avatar_url && !validHttpUrl(avatar_url))) throw new Error('Please enter a valid name and avatar URL');
-    return { display_name, headline, bio, avatar_url, accent_color };
+    return { display_name, headline, bio, avatar_url, accent_color, avatar_text, avatar_background, avatar_shape, show_top_brand, show_top_tagline, favicon_data };
   }
   if (path === 'sources') {
     const name = text(data.name, 60);
@@ -254,9 +286,9 @@ async function adminApi(request, env, path, method) {
   }
   if (path === 'analytics' && method === 'GET') return analytics(env, periodName(new URL(request.url).searchParams.get('period')));
   if (path === 'profile' && method === 'PUT') {
-    const data = verifyAdminPayload(path, method, await bodyJson(request));
-    await env.DB.prepare(`UPDATE settings SET display_name=?,headline=?,bio=?,avatar_url=?,accent_color=?,updated_at=? WHERE id=1`)
-      .bind(data.display_name,data.headline,data.bio,data.avatar_url,data.accent_color,Date.now()).run();
+    const data = verifyAdminPayload(path, method, await bodyJson(request, 128000));
+    await env.DB.prepare(`UPDATE settings SET display_name=?,headline=?,bio=?,avatar_url=?,accent_color=?,avatar_text=?,avatar_background=?,avatar_shape=?,show_top_brand=?,show_top_tagline=?,favicon_data=?,updated_at=? WHERE id=1`)
+      .bind(data.display_name,data.headline,data.bio,data.avatar_url,data.accent_color,data.avatar_text,data.avatar_background,data.avatar_shape,data.show_top_brand,data.show_top_tagline,data.favicon_data,Date.now()).run();
     return json({ ok: true });
   }
   const parts = path.split('/');
@@ -311,32 +343,33 @@ export default {
     const method = request.method;
     const pathname = url.pathname;
     try {
-      if (pathname === '/api/public' && method === 'GET') return publicData(env);
+      if ((pathname === '/site-icon' || pathname === '/favicon.ico') && (method === 'GET' || method === 'HEAD')) return await siteIcon(request,env);
+      if (pathname === '/api/public' && method === 'GET') return await publicData(env);
       if (pathname.startsWith('/api/admin/')) {
         if (!['GET','POST','PUT','PATCH','DELETE'].includes(method)) return fail('Method not allowed',405);
         const subpath = pathname.slice('/api/admin/'.length);
         if (subpath === 'buttons/order' && method === 'PATCH') {
           if (!apiOriginAllowed(request)) return fail('Invalid request origin',403);
           if (!(await isAuthenticated(request,env))) return fail('Please sign in',401);
-          return reorderButtons(request,env);
+          return await reorderButtons(request,env);
         }
-        return adminApi(request, env, subpath,method);
+        return await adminApi(request, env, subpath,method);
       }
       if (pathname.startsWith('/api/')) return fail('Endpoint not found',404);
       if (method !== 'GET' && method !== 'HEAD') return new Response('Method not allowed', { status: 405 });
-      if (pathname.startsWith('/out/')) return goOutbound(request,env,ctx,pathname.slice('/out/'.length));
-      if (pathname === '/admin' || pathname === '/admin/') return landing(request,env,ctx,null,false);
-      if (pathname === '/' || pathname === '' || pathname === '/index.html') return landing(request,env,ctx,null);
+      if (pathname.startsWith('/out/')) return await goOutbound(request,env,ctx,pathname.slice('/out/'.length));
+      if (pathname === '/admin' || pathname === '/admin/') return await landing(request,env,ctx,null,false);
+      if (pathname === '/' || pathname === '' || pathname === '/index.html') return await landing(request,env,ctx,null);
       if (/^\/[a-z][a-z0-9_-]{0,39}\/?$/.test(pathname)) {
         const slug = pathname.replace(/^\/+|\/+$/g,'');
         const source = await env.DB.prepare('SELECT id,name,slug FROM sources WHERE slug = ? AND active=1').bind(slug).first();
-        if (source) return landing(request,env,ctx,source);
+        if (source) return await landing(request,env,ctx,source);
         return noStore(new Response('Page not found. Visit / for all links.', { status: 404, headers: {'Content-Type':'text/plain; charset=utf-8'} }));
       }
-      return env.ASSETS.fetch(request);
+      return await env.ASSETS.fetch(request);
     } catch (error) {
       console.error('LinkHub handler error:',error);
-      if (error?.message === 'Invalid JSON' || error?.message === 'Request is too large' || error?.message?.startsWith('Please enter') || error?.message?.startsWith('Use a name')) return fail(error.message,400);
+      if (error?.message === 'Invalid JSON' || error?.message === 'Request is too large' || error?.message?.startsWith('Please enter') || error?.message?.startsWith('Use a name') || error?.message?.startsWith('Favicon') || error?.message?.startsWith('Invalid favicon') || error?.message?.startsWith('Use a PNG')) return fail(error.message,400);
       if (/UNIQUE constraint failed/i.test(error?.message || '')) return fail('This URL slug is already in use',409);
       return fail('Server error. Check Worker logs and D1 migrations.',500);
     }

@@ -1,4 +1,4 @@
--- LinkHub v0.1.0 — Cloudflare D1 (SQLite). Run through Wrangler migrations.
+-- LinkHub v0.2.0 — Cloudflare D1 (SQLite). Run through Wrangler migrations.
 -- Dates are UTC Unix timestamps in milliseconds. We do not store IP addresses or referrers.
 
 CREATE TABLE IF NOT EXISTS settings (
@@ -61,21 +61,21 @@ CREATE TABLE IF NOT EXISTS login_attempts (
   window_start INTEGER NOT NULL
 );
 
--- Sources are active and ready to share. Every source URL renders the SAME landing page.
+-- Generic sample sources. Each entry displays the same landing page.
 INSERT OR IGNORE INTO sources (name, slug) VALUES
-  ('Instagram', 'ig'), ('Telegram', 'tg'), ('Facebook', 'fb'),
-  ('X', 'x'), ('Reddit', 'reddit');
+  ('Source One', 'source-one'), ('Source Two', 'source-two'),
+  ('Source Three', 'source-three'), ('Source Four', 'source-four');
 
--- These are INACTIVE examples: no one is sent to placeholder profiles.
+-- Safe, visible examples until their URLs are replaced in the admin.
 INSERT INTO buttons (title, subtitle, url, category, accent, active, sort_order)
-SELECT 'Patreon', 'Support my work', 'https://www.patreon.com/', 'Membership', '#f9e8e7', 0, 1
+SELECT 'Example Resource One', 'Open a sample destination', 'https://example.com/resource-one', 'Resources', '#f9e8e7', 1, 1
 WHERE NOT EXISTS (SELECT 1 FROM buttons);
 INSERT INTO buttons (title, subtitle, url, category, accent, active, sort_order)
-SELECT 'SubscribeStar', 'Exclusive updates', 'https://www.subscribestar.com/', 'Membership', '#f9edd7', 0, 2
+SELECT 'Example Resource Two', 'Explore another example', 'https://example.com/resource-two', 'Resources', '#f9edd7', 1, 2
 WHERE (SELECT count(*) FROM buttons) = 1;
 INSERT INTO buttons (title, subtitle, url, category, accent, active, sort_order)
-SELECT 'X', 'Follow my updates', 'https://x.com/', 'Social', '#e8eefa', 0, 3
+SELECT 'Example Channel One', 'Browse the sample channel', 'https://example.com/channel-one', 'Channels', '#e8eefa', 1, 3
 WHERE (SELECT count(*) FROM buttons) = 2;
 INSERT INTO buttons (title, subtitle, url, category, accent, active, sort_order)
-SELECT 'GitHub', 'Explore my projects', 'https://github.com/', 'Social', '#e4f0e9', 0, 4
+SELECT 'Example Channel Two', 'Visit the sample channel', 'https://example.com/channel-two', 'Channels', '#e4f0e9', 1, 4
 WHERE (SELECT count(*) FROM buttons) = 3;
