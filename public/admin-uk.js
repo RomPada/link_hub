@@ -1,5 +1,6 @@
 /** Client-side language option for the private admin, English remains default. */
 const lexicon = {
+  'View details':'Переглянути деталі','Analytics period':'Період аналітики',
   'Overview':'Огляд','My links':'Мої посилання','Traffic sources':'Джерела трафіку','Appearance':'Оформлення',
   'WORKSPACE':'РОБОЧИЙ ПРОСТІР','PERSONAL CONTROL CENTER':'ПАНЕЛЬ КЕРУВАННЯ','View public page':'Переглянути публічну сторінку','Sign out':'Вийти',
   'Open page':'Відкрити сторінку','LIVE':'ОНЛАЙН','A CLEARER PICTURE OF YOUR TRAFFIC':'АНАЛІТИКА ТВОГО ТРАФІКУ',
@@ -24,6 +25,7 @@ const lexicon = {
   'Display top brand':'Показувати логотип зверху','Display top tagline':'Показувати верхній підпис','Top-of-page elements':'Верхня панель сторінки',
   'Save appearance':'Зберегти оформлення','Add a traffic source':'Додати джерело трафіку','Edit source':'Редагувати джерело',
   'Add a destination':'Додати посилання','Edit button':'Редагувати кнопку','Source name':'Назва джерела','Short URL slug':'Коротка адреса',
+  'Button icon':'Іконка кнопки','Icon mode':'Режим іконки','Image URL':'URL зображення','Upload image':'Завантажити зображення','Default arrow':'Звичайна стрілка',
   'Button title':'Назва кнопки','Description':'Опис','Destination URL':'Адреса ресурсу','Section / category':'Категорія','Card color':'Колір картки',
   'Active (accepts visits)':'Активне (рахувати відвідування)','Visible on public page':'Показувати на сторінці',
   'Cancel':'Скасувати','Create':'Створити','Save changes':'Зберегти','Delete permanently':'Видалити назавжди','Delete traffic source?':'Видалити джерело трафіку?','Delete destination button?':'Видалити кнопку?',
@@ -67,6 +69,28 @@ Object.assign(lexicon, {
   'Create':'Створити','Edit source':'Редагувати джерело',
   'Your data, your links.':'Твої дані, твої посилання.',
   'Nothing to show yet.':'Поки немає даних.','Loading analytics…':'Завантаження аналітики…',
+  'Button icon':'Іконка кнопки',
+  'Automatic favicon from the destination, image URL, your own file, or the default arrow.':'Автоматичний значок ресурсу, URL зображення, власний файл або стандартна стрілка.',
+  'Auto — destination favicon':'Автоматично — фавікон ресурсу',
+  'Image URL':'URL зображення',
+  'Upload image':'Завантажити зображення',
+  'Default arrow':'Стандартна стрілка',
+  'Icon mode':'Режим іконки',
+  'Upload PNG, WebP or ICO (60 KB max)':'Завантаж PNG, WebP або ICO (до 60 КБ)',
+  'Uses /favicon.ico from the destination website. Some websites do not provide one; the arrow is used instead.':'Використовує /favicon.ico з сайту призначення. Якщо іконки немає, буде стрілка.',
+  'Provide the direct URL of an image file.':'Укажи пряму URL-адресу файлу зображення.',
+  'File is stored in D1 and served by LinkHub.':'Файл зберігається в D1 та віддається через LinkHub.',
+  'Use the standard arrow icon.':'Використовувати стандартну стрілку.',
+  'View details':'Переглянути деталі',
+  'Loading events…':'Завантаження подій…',
+  'One row per anonymous browser in this period':'Один рядок на анонімний браузер за період',
+  'Outbound events contributing to outbound clicks ÷ page views':'Вихідні події, які формують частку кліків від переглядів',
+  'Event log for this metric':'Журнал подій для цього показника',
+  'Last 7 days':'Останні 7 днів',
+  'DEVICE':'ПРИСТРІЙ',
+  'SOURCE':'ДЖЕРЕЛО',
+  'Appearance':'Оформлення',
+  'Used for highlights, link arrows, focus indicators and interactive details.':'Використовується для акцентів, стрілок, виділення фокусу й інтерактивних елементів.',
   'Unexpected error':'Неочікувана помилка'
 });
 const attributes=['placeholder','title','aria-label'];

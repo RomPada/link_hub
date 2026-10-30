@@ -1,4 +1,4 @@
-/** LinkHub v0.2.0 — one Cloudflare Worker + D1 + static assets.
+/** LinkHub v0.3.0 — one Cloudflare Worker + D1 + static assets.
  * Analytics counts page visits and outbound button clicks separately.
  * No raw IP addresses or HTTP referrers are stored.
  */
@@ -8,7 +8,7 @@ const VISITOR_COOKIE = 'lh_visitor';
 const SOURCE_COOKIE = 'lh_source';
 const WEEK_MS = 7 * 86400000;
 const SESSION_TTL = WEEK_MS;
-const RESERVED = new Set(['admin', 'api', 'out', 'login', 'demo', 'go', 'favicon', 'manifest', 'icon', 'robots', 'index', 'assets', 'site-icon']);
+const RESERVED = new Set(['admin', 'api', 'out', 'button-icon', 'login', 'demo', 'go', 'favicon', 'manifest', 'icon', 'robots', 'index', 'assets', 'site-icon']);
 const NAV_BOTS = /bot|crawl|spider|slurp|preview|facebookexternalhit|twitterbot|telegrambot|discordbot|whatsapp|linkedinbot|pinterest|headless|lighthouse|google-inspectiontool/i;
 const VALID_SLUG = /^[a-z][a-z0-9_-]{0,39}$/;
 const COLOR_CHOICES = new Set(['#e9eefc','#f9e8e7','#f9edd7','#e4f0e9','#ede8f9','#e8f3f5','#f2ece6','#f5e9f1']);
@@ -89,6 +89,18 @@ function safeFavicon(value) {
   const webp = bytes.startsWith('RIFF') && bytes.slice(8, 12) === 'WEBP';
   if (!(png || ico || webp)) throw new Error('Invalid favicon file signature');
   return value;
+}
+async function buttonIcon(request, env, identifier) {
+  if (!/^\d+$/.test(identifier)) return fail('Icon not found', 404);
+  const button = await env.DB.prepare('SELECT icon_mode,icon_data FROM buttons WHERE id = ? AND active=1')
+    .bind(Number(identifier)).first();
+  if (!button || button.icon_mode !== 'upload' || !button.icon_data) return fail('Icon not found', 404);
+  const data = safeFavicon(button.icon_data);
+  const [, type, encoded] = /^data:(image\/[^;]+);base64,(.*)$/.exec(data);
+  const bytes = Uint8Array.from(atob(encoded), character => character.charCodeAt(0));
+  return new Response(request.method === 'HEAD' ? null : bytes, {
+    headers: { 'Content-Type': type, 'Cache-Control': 'public, max-age=3600', 'X-Content-Type-Options': 'nosniff' }
+  });
 }
 async function siteIcon(request, env) {
   const row = await env.DB.prepare('SELECT favicon_data FROM settings WHERE id=1').first();
@@ -202,7 +214,7 @@ async function goOutbound(request, env, ctx, identifier) {
 async function publicData(env) {
   const [profile, links] = await Promise.all([
     env.DB.prepare('SELECT display_name,headline,bio,avatar_url,accent_color,avatar_text,avatar_background,avatar_shape,show_top_brand,show_top_tagline,updated_at FROM settings WHERE id=1').first(),
-    env.DB.prepare('SELECT id,title,subtitle,category,accent FROM buttons WHERE active=1 ORDER BY sort_order ASC,id ASC').all()
+    env.DB.prepare('SELECT id,title,subtitle,category,accent,url,icon_mode,icon_url FROM buttons WHERE active=1 ORDER BY sort_order ASC,id ASC').all()
   ]);
   return json({ profile, links: links.results });
 }
@@ -235,8 +247,13 @@ function verifyAdminPayload(path, method, data) {
     const category = text(data.category, 50) || 'Links';
     const accent = safeColor(data.accent);
     const active = bool(data.active);
+    const icon_mode = ['auto','url','upload','default'].includes(data.icon_mode) ? data.icon_mode : 'auto';
+    const icon_url = text(data.icon_url, 1800);
+    const icon_data = safeFavicon(data.icon_data ?? '');
     if (!title || !validHttpUrl(url)) throw new Error('Please enter a title and valid http(s) URL');
-    return { title, subtitle, url, category, accent, active };
+    if (icon_mode === 'url' && !validHttpUrl(icon_url)) throw new Error('Please enter a valid icon image URL');
+    if (icon_mode === 'upload' && !icon_data) throw new Error('Upload an icon image to use upload mode');
+    return { title, subtitle, url, category, accent, active, icon_mode, icon_url, icon_data };
   }
   throw new Error(`Unknown resource: ${path} (${method})`);
 }
@@ -285,6 +302,28 @@ async function adminApi(request, env, path, method) {
     return json({ profile, sources: sources.results, buttons: buttons.results });
   }
   if (path === 'analytics' && method === 'GET') return analytics(env, periodName(new URL(request.url).searchParams.get('period')));
+  if (path === 'analytics/details' && method === 'GET') {
+    const params = new URL(request.url).searchParams;
+    const metric = params.get('metric');
+    if (!['views','unique','outbound','ctr'].includes(metric)) return fail('Unknown metric');
+    const start = periodStart(periodName(params.get('period')));
+    const kind = metric === 'outbound' || metric === 'ctr' ? 'outbound' : 'view';
+    // A row per browser for Unique visitors, newest activity for other metrics.
+    const sql = metric === 'unique'
+      ? `SELECT e.id,e.kind,e.source_name,e.button_name,e.country,e.device,e.visitor_id,e.occurred_at
+         FROM events e INNER JOIN (
+            SELECT visitor_id,MIN(occurred_at) AS first_seen FROM events
+            WHERE kind='view' AND occurred_at >= ? GROUP BY visitor_id
+         ) u ON e.visitor_id = u.visitor_id AND e.occurred_at = u.first_seen
+         WHERE e.kind='view' AND e.occurred_at >= ? GROUP BY e.visitor_id
+         ORDER BY e.occurred_at DESC LIMIT 250`
+      : `SELECT id,kind,source_name,button_name,country,device,visitor_id,occurred_at
+         FROM events WHERE kind = ? AND occurred_at >= ? ORDER BY occurred_at DESC LIMIT 250`;
+    const results = metric === 'unique'
+      ? await env.DB.prepare(sql).bind(start,start).all()
+      : await env.DB.prepare(sql).bind(kind,start).all();
+    return json({ metric, period:periodName(params.get('period')), records:results.results, limit:250 });
+  }
   if (path === 'profile' && method === 'PUT') {
     const data = verifyAdminPayload(path, method, await bodyJson(request, 128000));
     await env.DB.prepare(`UPDATE settings SET display_name=?,headline=?,bio=?,avatar_url=?,accent_color=?,avatar_text=?,avatar_background=?,avatar_shape=?,show_top_brand=?,show_top_tagline=?,favicon_data=?,updated_at=? WHERE id=1`)
@@ -298,23 +337,23 @@ async function adminApi(request, env, path, method) {
   if (parts.length > 2 || (parts.length === 2 && !id)) return fail('Invalid item ID', 400);
 
   if (method === 'POST' && !id) {
-    const data = verifyAdminPayload(table, method, await bodyJson(request));
+    const data = verifyAdminPayload(table, method, await bodyJson(request, table === 'buttons' ? 128000 : 16384));
     if (table === 'sources') {
       await env.DB.prepare('INSERT INTO sources(name,slug,active,created_at) VALUES(?,?,?,?)')
         .bind(data.name,data.slug,data.active,Date.now()).run();
     } else {
       const top = await env.DB.prepare('SELECT MIN(sort_order) AS first FROM buttons').first();
-      await env.DB.prepare(`INSERT INTO buttons(title,subtitle,url,category,accent,active,sort_order,created_at) VALUES(?,?,?,?,?,?,?,?)`)
-        .bind(data.title,data.subtitle,data.url,data.category,data.accent,data.active,Number(top?.first ?? 1)-1,Date.now()).run();
+      await env.DB.prepare(`INSERT INTO buttons(title,subtitle,url,category,accent,active,sort_order,created_at,icon_mode,icon_url,icon_data) VALUES(?,?,?,?,?,?,?,?,?,?,?)`)
+        .bind(data.title,data.subtitle,data.url,data.category,data.accent,data.active,Number(top?.first ?? 1)-1,Date.now(),data.icon_mode,data.icon_url,data.icon_data).run();
     }
     return json({ ok: true },201);
   }
   if (method === 'PUT' && id) {
-    const data = verifyAdminPayload(table, method, await bodyJson(request));
+    const data = verifyAdminPayload(table, method, await bodyJson(request, table === 'buttons' ? 128000 : 16384));
     const sql = table === 'sources' ? 'UPDATE sources SET name=?,slug=?,active=? WHERE id=?'
-      : 'UPDATE buttons SET title=?,subtitle=?,url=?,category=?,accent=?,active=? WHERE id=?';
+      : 'UPDATE buttons SET title=?,subtitle=?,url=?,category=?,accent=?,active=?,icon_mode=?,icon_url=?,icon_data=? WHERE id=?';
     const values = table === 'sources' ? [data.name,data.slug,data.active,id]
-      : [data.title,data.subtitle,data.url,data.category,data.accent,data.active,id];
+      : [data.title,data.subtitle,data.url,data.category,data.accent,data.active,data.icon_mode,data.icon_url,data.icon_data,id];
     const result = await env.DB.prepare(sql).bind(...values).run();
     if (!result.meta.changes) return fail('Item not found',404);
     return json({ ok: true });
@@ -343,6 +382,7 @@ export default {
     const method = request.method;
     const pathname = url.pathname;
     try {
+      if (pathname.startsWith('/button-icon/') && (method === 'GET' || method === 'HEAD')) return await buttonIcon(request,env,pathname.slice('/button-icon/'.length));
       if ((pathname === '/site-icon' || pathname === '/favicon.ico') && (method === 'GET' || method === 'HEAD')) return await siteIcon(request,env);
       if (pathname === '/api/public' && method === 'GET') return await publicData(env);
       if (pathname.startsWith('/api/admin/')) {
@@ -369,7 +409,7 @@ export default {
       return await env.ASSETS.fetch(request);
     } catch (error) {
       console.error('LinkHub handler error:',error);
-      if (error?.message === 'Invalid JSON' || error?.message === 'Request is too large' || error?.message?.startsWith('Please enter') || error?.message?.startsWith('Use a name') || error?.message?.startsWith('Favicon') || error?.message?.startsWith('Invalid favicon') || error?.message?.startsWith('Use a PNG')) return fail(error.message,400);
+      if (error?.message === 'Invalid JSON' || error?.message === 'Request is too large' || error?.message?.startsWith('Please enter') || error?.message?.startsWith('Use a name') || error?.message?.startsWith('Favicon') || error?.message?.startsWith('Invalid favicon') || error?.message?.startsWith('Use a PNG') || error?.message?.startsWith('Please enter a valid icon') || error?.message?.startsWith('Upload an icon')) return fail(error.message,400);
       if (/UNIQUE constraint failed/i.test(error?.message || '')) return fail('This URL slug is already in use',409);
       return fail('Server error. Check Worker logs and D1 migrations.',500);
     }

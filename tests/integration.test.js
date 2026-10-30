@@ -9,6 +9,7 @@ function makeD1() {
   const sqlite = new DatabaseSync(':memory:');
   sqlite.exec(readFileSync(new URL('../migrations/0001_init.sql', import.meta.url), 'utf8'));
   sqlite.exec(readFileSync(new URL('../migrations/0002_public_identity.sql', import.meta.url), 'utf8'));
+  sqlite.exec(readFileSync(new URL('../migrations/0003_button_icons.sql', import.meta.url), 'utf8'));
   function bindStatement(query, params) {
     const statement = sqlite.prepare(query);
     const values = params.map((value) => value === undefined ? null : value);
@@ -148,4 +149,51 @@ test('a v0.1.0 database upgrades untouched samples but retains custom destinatio
   assert.equal(sqlite.prepare('SELECT url FROM buttons WHERE id=1').get().url,'https://example.net/custom');
   assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM events').get().n,1);
   assert.ok(sqlite.prepare('PRAGMA table_info(settings)').all().some((row)=>row.name==='favicon_data'));
+});
+
+test('link icon modes can be configured and uploaded icon is served only for public active links', async () => {
+  const {sqlite,env,ctx,req}=setup();
+  const login=await worker.fetch(req('/api/admin/login',{method:'POST',body:{password:env.ADMIN_PASSWORD}}),env,ctx());
+  const session=login.headers.get('set-cookie').split(';')[0];
+  const tinyPng='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4////fwAJ+wP+lXcf7wAAAABJRU5ErkJggg==';
+  const base={title:'Test icon',subtitle:'Preview',url:'https://example.net/resource',category:'Resources',accent:'#e9eefc',active:true};
+  const create=await worker.fetch(req('/api/admin/buttons',{method:'POST',cookie:session,body:{...base,icon_mode:'upload',icon_url:'',icon_data:tinyPng}}),env,ctx());
+  assert.equal(create.status,201,await create.text());
+  const saved=sqlite.prepare("SELECT * FROM buttons WHERE title='Test icon'").get();
+  assert.equal(saved.icon_mode,'upload');
+  assert.equal(saved.icon_data,tinyPng);
+  const icon=await worker.fetch(req(`/button-icon/${saved.id}`),env,ctx());
+  assert.equal(icon.status,200);
+  assert.equal(icon.headers.get('Content-Type'),'image/png');
+  const page=await (await worker.fetch(req('/api/public'),env,ctx())).json();
+  assert.equal(page.links.find(link=>link.id===saved.id).icon_mode,'upload');
+  assert.equal('icon_data' in page.links.find(link=>link.id===saved.id),false);
+  const update=await worker.fetch(req(`/api/admin/buttons/${saved.id}`,{method:'PUT',cookie:session,body:{...base,icon_mode:'auto',icon_url:'',icon_data:tinyPng}}),env,ctx());
+  assert.equal(update.status,200,await update.text());
+  assert.equal((await worker.fetch(req(`/button-icon/${saved.id}`),env,ctx())).status,404);
+  const bad=await worker.fetch(req('/api/admin/buttons',{method:'POST',cookie:session,body:{...base,icon_mode:'url',icon_url:'javascript:alert(1)',icon_data:''}}),env,ctx());
+  assert.equal(bad.status,400);
+});
+
+test('KPI details are authenticated and distinguish page views, unique visitors, outbound events and CTR events',async()=>{
+  const {sqlite,env,ctx,req}=setup();
+  const timestamp=Date.now();
+  const insert=sqlite.prepare('INSERT INTO events(kind,source_name,button_name,visitor_id,country,device,occurred_at) VALUES(?,?,?,?,?,?,?)');
+  insert.run('view','Source One',null,'visitor-aaa','DE','Mobile',timestamp-4000);
+  insert.run('view','Source One',null,'visitor-aaa','DE','Mobile',timestamp-3000);
+  insert.run('view','Source Two',null,'visitor-bbb','FR','Desktop',timestamp-2000);
+  insert.run('outbound','Source One','Example Resource One','visitor-aaa','DE','Mobile',timestamp-1000);
+  assert.equal((await worker.fetch(req('/api/admin/analytics/details?metric=views&period=today'),env,ctx())).status,401);
+  const login=await worker.fetch(req('/api/admin/login',{method:'POST',body:{password:env.ADMIN_PASSWORD}}),env,ctx());
+  const session=login.headers.get('set-cookie').split(';')[0];
+  for(const [metric,count] of [['views',3],['unique',2],['outbound',1],['ctr',1]]) {
+    const response=await worker.fetch(req(`/api/admin/analytics/details?metric=${metric}&period=today`,{cookie:session}),env,ctx());
+    assert.equal(response.status,200,await response.clone().text());
+    const data=await response.json();
+    assert.equal(data.records.length,count,metric);
+    assert.equal(data.metric,metric);
+    assert.equal(data.records[0].country===null,false);
+  }
+  const invalid=await worker.fetch(req('/api/admin/analytics/details?metric=bad',{cookie:session}),env,ctx());
+  assert.equal(invalid.status,400);
 });

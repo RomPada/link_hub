@@ -31,12 +31,43 @@ async function api(path, { method = 'GET', data } = {}) {
 }
 function monogram(name) { return (name || 'LH').split(/\s+/).slice(0, 2).map((x) => x[0]?.toUpperCase() || '').join(''); }
 function socialIcon() { return '↗'; }
+async function readIconFile(file) {
+  if(file.size>61440)throw new Error('Icon must not exceed 60 KB');
+  if(!/\.(png|webp|ico)$/i.test(file.name))throw new Error('Upload PNG, WebP or ICO');
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();reader.onload=()=>{
+      const data=String(reader.result);
+      resolve(/\.ico$/i.test(file.name)?data.replace(/^data:[^;]+;/,'data:image/x-icon;'):data);
+    };
+    reader.onerror=()=>reject(new Error('Unable to read image file'));
+    reader.readAsDataURL(file);
+  });
+}
+function iconSrc(button) {
+  try {
+    if (button.icon_mode === 'default') return '';
+    if (button.icon_mode === 'upload' && Number.isInteger(Number(button.id))) return `/button-icon/${button.id}`;
+    if (button.icon_mode === 'url' && /^https?:\/\//i.test(button.icon_url || '')) return button.icon_url;
+    const dest = new URL(button.url || '');
+    if (['https:', 'http:'].includes(dest.protocol)) return `${dest.origin}/favicon.ico`;
+  } catch {}
+  return '';
+}
+function iconTile(button) {
+  const src=iconSrc(button);
+  return `<span class="public-link-icon" style="--tile:${attr(button.accent)}">${src ? `<img src="${attr(src)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none';this.nextElementSibling.hidden=false" /><span class="icon-tile-fallback" hidden>↗</span>` : '↗'}</span>`;
+}
+function publicLanguageMenu(lang, t) {
+  return `<div class="language-menu"><button type="button" id="language-toggle" class="language-toggle" aria-expanded="false" aria-haspopup="listbox" aria-label="${attr(t.language)}"><span class="language-globe" aria-hidden="true">◎</span><span>${escapeHTML(publicLanguages.find(([code])=>code===lang)?.[1]||'English')}</span><span class="language-chevron" aria-hidden="true">⌄</span></button>
+  <div class="language-options" id="language-options" role="listbox" aria-label="${attr(t.language)}" hidden>${publicLanguages.map(([code,label])=>`<button type="button" role="option" aria-selected="${lang===code}" data-public-language="${code}" class="language-option${lang===code?' selected':''}"><span>${escapeHTML(label)}</span>${lang===code?'<span aria-hidden="true">✓</span>':''}</button>`).join('')}</div></div>`;
+}
+
 function grouped(items, key) {
   return items.reduce((all, item) => { const name = item[key] || 'Links'; (all[name] ||= []).push(item); return all; }, Object.create(null));
 }
 function linkCard(button, locale) {
   return `<a class="public-link" href="/out/${button.id}" target="_blank" rel="noopener noreferrer" aria-label="${attr(locale.open)} ${attr(button.title)} ${attr(locale.newTab)}">
-    <span class="public-link-icon" style="--tile:${attr(button.accent)}">↗</span>
+    ${iconTile(button)}
     <span class="public-link-text"><strong>${escapeHTML(button.title)}</strong><small>${escapeHTML(button.subtitle || locale.cardFallback)}</small></span>
     <span class="public-link-arrow" aria-hidden="true">↗</span>
   </a>`;
@@ -56,21 +87,18 @@ async function renderPublic() {
     const avatarText = (profile.avatar_text || monogram(name)).slice(0,8);
     const shape = ['rounded','circle','square'].includes(profile.avatar_shape) ? profile.avatar_shape : 'rounded';
     const background = /^#[a-f0-9]{6}$/i.test(profile.avatar_background || '') ? profile.avatar_background : '#142849';
-    document.title = `${name} · Links`;
+    document.title = name;
     document.querySelector('link[rel="icon"]')?.setAttribute('href', `/site-icon?v=${encodeURIComponent(profile.updated_at || 0)}`);
     const avatar = profile.avatar_url
       ? `<img class="public-avatar-img" src="${attr(profile.avatar_url)}" alt="${attr(name)}" />`
       : `<span>${escapeHTML(avatarText)}</span>`;
-    const brand = profile.show_top_brand !== 0;
-    const tagline = profile.show_top_tagline !== 0;
     const intro = profile.headline === 'Everything in one place.' ? t.defaultHeadline : (profile.headline || t.defaultHeadline);
     const bio = profile.bio === 'Follow, explore, and stay connected.' ? t.defaultBio : (profile.bio || '');
     app.innerHTML = `<div class="landing-shell" style="--hub-accent:${attr(profile.accent_color || '#4267e9')}">
       <div class="landing-halo landing-halo-a"></div><div class="landing-halo landing-halo-b"></div>
       <main class="public-container">
         <div class="public-topbar">
-          <div class="top-mark">${brand ? '<span class="brand-icon-mini">↗</span><span class="top-brand-name">LINKHUB</span>' : ''}${brand && tagline ? '<span class="top-mark-dot"></span>' : ''}${tagline ? `<span class="top-tagline">${escapeHTML(t.tagline)}</span>` : ''}</div>
-          <label class="language-picker" aria-label="${attr(t.language)}"><span class="visually-hidden">${escapeHTML(t.language)}</span><select id="public-language" aria-label="${attr(t.language)}">${publicLanguages.map(([code,label])=> `<option value="${code}" ${code===lang?'selected':''}>${label}</option>`).join('')}</select></label>
+          ${publicLanguageMenu(lang,t)}
         </div>
         <header class="profile-head">
           <div class="public-avatar avatar-${shape}" style="--avatar-bg:${attr(background)}">${avatar}</div>
@@ -79,18 +107,30 @@ async function renderPublic() {
           <h2>${escapeHTML(intro)}</h2>
           <p>${escapeHTML(bio)}</p>
         </header>
-        <div class="profile-divider"><span>${escapeHTML(t.explore)}</span><span class="divider-line"></span><span class="divider-spark">✳</span></div>
+        <div class="profile-divider"><span>${escapeHTML(t.explore)}</span><span class="divider-line"></span></div>
         <div class="public-groups">${Object.keys(groups).length ? Object.entries(groups).map(([title,links]) => `
-          <section class="public-category"><div class="category-title"><span>${escapeHTML(sampleCategory(title,t))}</span><span>${String(links.length).padStart(2,'0')}</span></div>
+          <section class="public-category"><div class="category-title"><span>${escapeHTML(sampleCategory(title,t))}</span></div>
           <div class="public-links">${links.map((button)=>linkCard(button,t)).join('')}</div></section>`).join('') : `
           <div class="public-empty"><span class="public-empty-icon">↗</span><h3>${escapeHTML(t.emptyTitle)}</h3><p>${escapeHTML(t.emptyBody)}</p></div>`}</div>
         <footer class="public-footer"><span>${escapeHTML(t.footer)}</span><a href="/" aria-label="LinkHub home">LINKHUB <span aria-hidden="true">↗</span></a></footer>
       </main></div>`;
-    qs('#public-language').addEventListener('change', (event) => {
-      state.publicLang = event.target.value;
-      try { localStorage.setItem('linkhub_public_lang',state.publicLang); } catch {}
+    const toggle=qs('#language-toggle'),options=qs('#language-options');
+    function closeLanguages() {options.hidden=true;toggle.setAttribute('aria-expanded','false');}
+    toggle?.addEventListener('click',()=>{options.hidden=!options.hidden;toggle.setAttribute('aria-expanded',String(!options.hidden));});
+    qsa('[data-public-language]').forEach((button)=>button.addEventListener('click',()=>{
+      state.publicLang=button.dataset.publicLanguage;
+      try {localStorage.setItem('linkhub_public_lang',state.publicLang);} catch {}
       void renderPublic();
+    }));
+    options?.addEventListener('keydown',(event)=>{
+      const buttons=qsa('[data-public-language]',options);
+      const current=buttons.indexOf(document.activeElement);
+      if(['ArrowUp','ArrowDown'].includes(event.key)) { event.preventDefault();buttons[(current+(event.key==='ArrowDown'?1:-1)+buttons.length)%buttons.length].focus(); }
+      if(event.key==='Escape'){closeLanguages();toggle.focus();}
     });
+    toggle?.addEventListener('keydown',(event)=>{if(event.key==='ArrowDown'){event.preventDefault();options.hidden=false;toggle.setAttribute('aria-expanded','true');qsa('button',options)[0]?.focus();}});
+    toggle?.addEventListener('blur',()=>setTimeout(()=>{if(!document.activeElement?.closest('.language-menu'))closeLanguages();},120));
+    options?.addEventListener('focusout',()=>setTimeout(()=>{if(!document.activeElement?.closest('.language-menu'))closeLanguages();},120));
   } catch (error) {
     app.innerHTML = `<div class="public-error"><h1>${escapeHTML(t.error)}</h1><p>${escapeHTML(error.message)}</p><button type="button" class="btn btn-primary" id="retry-public">${escapeHTML(t.retry)}</button></div>`;
     qs('#retry-public')?.addEventListener('click',renderPublic);
@@ -108,17 +148,17 @@ function adminShell(content) {
       <div class="sidebar-spacer"></div>
       <a class="sidebar-visit" href="/" target="_blank" rel="noopener">View public page <span>↗</span></a>
       <button class="sidebar-logout" id="sign-out">Sign out <span>→</span></button>
-      <div class="sidebar-version">LINKHUB · v0.2.0</div>
+      <div class="sidebar-version">LINKHUB · v0.3.0</div>
     </aside>
     <div class="dash-main">
-      <header class="dash-topbar"><div class="dash-topbar-title">LINKHUB / <span>${tabs.find((tab) => tab[0] === selected)[1].toUpperCase()}</span></div><div class="dash-topbar-right"><label class="admin-lang-field"><span class="visually-hidden">Dashboard language</span><select id="admin-language" aria-label="Dashboard language"><option value="en" ${state.adminLang==='en'?'selected':''}>EN</option><option value="uk" ${state.adminLang==='uk'?'selected':''}>УКР</option></select></label><span class="pill-live"><i></i> LIVE</span><a href="/" target="_blank" rel="noopener" class="top-view">Open page ↗</a></div></header>
+      <header class="dash-topbar"><div class="dash-topbar-title">LINKHUB / <span>${escapeHTML(adminText(tabs.find((tab) => tab[0] === selected)[1],state.adminLang).toUpperCase())}</span></div><div class="dash-topbar-right"><label class="admin-lang-field"><span class="visually-hidden">Dashboard language</span><select id="admin-language" aria-label="Dashboard language"><option value="en" ${state.adminLang==='en'?'selected':''}>EN</option><option value="uk" ${state.adminLang==='uk'?'selected':''}>УКР</option></select></label><span class="pill-live"><i></i> LIVE</span></div></header>
       <div class="dashboard-content">${content}</div>
-      <footer class="dash-footer">LinkHub v0.2.0 <span>·</span> Cloudflare Workers + D1 <span>·</span> Your data, your links.</footer>
+      <footer class="dash-footer">LinkHub v0.3.0 <span>·</span> Cloudflare Workers + D1 <span>·</span> Your data, your links.</footer>
     </div>
   </div>`;
 }
-function metricCard(label, value, subtitle, icon, tone = '') {
-  return `<article class="metric-card ${tone}"><div class="metric-top"><span>${escapeHTML(label)}</span><span class="metric-icon">${icon}</span></div><strong>${formatCount(value)}</strong><small>${escapeHTML(subtitle)}</small></article>`;
+function metricCard(label, value, subtitle, icon, tone = '', metric = '') {
+  return `<button type="button" class="metric-card ${tone} metric-action" data-metric="${metric}" aria-label="${attr(label)} — view details"><span class="metric-top"><span>${escapeHTML(label)}</span><span class="metric-icon">${icon}</span></span><strong>${formatCount(value)}</strong><small>${escapeHTML(subtitle)}</small><span class="metric-more" aria-hidden="true">View details →</span></button>`;
 }
 function tableMarkup(items, columns, empty) {
   if (!items?.length) return `<div class="table-empty">${escapeHTML(empty || 'Nothing to show yet.')}</div>`;
@@ -140,30 +180,48 @@ function overview() {
   if (!data) return `<div class="loading-state"><span class="loading-ring"></span> Loading analytics…</div>`;
   const { summary, sources, buttons, countries, chart, recent } = data;
   const rate = summary.views.total ? (summary.outbound.total / summary.views.total * 100).toFixed(1) : '0.0';
-  return `<section class="page-heading"><div><div class="eyebrow">A CLEARER PICTURE OF YOUR TRAFFIC</div><h1>Overview<span class="heading-dot">.</span></h1><p>Know where visitors arrive and what they choose next.</p></div>${periodPills()}</section>
-    <div class="metric-grid">${metricCard('Page views',summary.views.total,'Visits to your LinkHub','↗','metric-primary')}${metricCard('Unique visitors',summary.views.unique,'Distinct anonymous browser IDs','◎')}${metricCard('Outbound clicks',summary.outbound.total,'Clicks on your destination buttons','↗')}${metricCard('Click-through rate',rate + '%','Outbound clicks ÷ page views','✧')}</div>
+  return `<section class="page-heading"><div><div class="eyebrow">A CLEARER PICTURE OF YOUR TRAFFIC</div><h1>Overview</h1><p>Know where visitors arrive and what they choose next.</p></div>${periodPills()}</section>
+    <div class="metric-grid">${metricCard('Page views',summary.views.total,'Visits to your LinkHub','↗','metric-primary','views')}${metricCard('Unique visitors',summary.views.unique,'Distinct anonymous browser IDs','◎','','unique')}${metricCard('Outbound clicks',summary.outbound.total,'Clicks on your destination buttons','↗','','outbound')}${metricCard('Click-through rate',rate + '%','Outbound clicks ÷ page views','✧','','ctr')}</div>
     <div class="dash-two-up"><section class="dash-panel chart-panel"><div class="panel-title-row"><div><h2>Traffic activity</h2><p>Last 14 days · Today first · UTC</p></div><div class="chart-legend"><span><i class="legend-views"></i>Views</span><span><i class="legend-clicks"></i>Clicks</span></div></div>${chartMarkup(chart)}</section>
     <section class="dash-panel"><div class="panel-title-row"><div><h2>Traffic sources</h2><p>Visits by entry link</p></div><span class="panel-detail">SOURCE MIX</span></div>${trendRows(sources,summary.views.total,'views')}</section></div>
     <div class="dash-two-up"><section class="dash-panel"><div class="panel-title-row"><div><h2>Destination clicks</h2><p>Which buttons people open</p></div><span class="panel-detail">BUTTONS</span></div>${trendRows(buttons,summary.outbound.total,'clicks')}</section>
     <section class="dash-panel"><div class="panel-title-row"><div><h2>Visitor countries</h2><p>Based on Cloudflare's approximate location</p></div><span class="panel-detail">WORLDWIDE</span></div>${trendRows(countries,summary.views.total,'views')}</section></div>
     <section class="dash-panel"><div class="panel-title-row"><div><h2>Recent activity</h2><p>Latest tracked views and outbound clicks</p></div><span class="panel-detail">${recent.length} RECORDS</span></div>${tableMarkup(recent,[['WHEN', (r) => `<span class="no-wrap">${escapeHTML(formatTime(r.occurred_at))}</span>`],['EVENT',(r)=> `<span class="event-pill ${r.kind === 'view' ? 'event-view':'event-outbound'}">${r.kind === 'view' ? 'Page view':'Outbound click'}</span>`],['ENTRY SOURCE',(r)=>escapeHTML(r.source_name)],['DESTINATION',(r)=>escapeHTML(r.button_name || '—')],['COUNTRY',(r)=>escapeHTML(r.country || 'Unknown')],['VISITOR',(r)=>`<code>${escapeHTML(r.visitor_id.slice(0,8))}…</code>`]],'Your first visit will appear here.')}</section>`;
 }
+async function metricDetails(metric) {
+  const titles={views:'Page views',unique:'Unique visitors',outbound:'Outbound clicks',ctr:'Click-through rate'};
+  const name=titles[metric]||'Details';
+  modal(name,`<div class="metric-detail-loading">Loading events…</div>`);
+  try {
+    const data=await api(`/api/admin/analytics/details?metric=${encodeURIComponent(metric)}&period=${encodeURIComponent(state.period)}`);
+    if(!state.modal)return;
+    const box=qs('.modal-card',state.modal);
+    box.classList.add('metric-detail-modal');
+    const count=data.records.length;
+    const period={today:'Today',week:'Last 7 days',month:'This month',all:'All time'}[state.period];
+    const summary=metric==='unique'?'One row per anonymous browser in this period':metric==='ctr'?'Outbound events contributing to outbound clicks ÷ page views':'Event log for this metric';
+    const display=`<div class="metric-detail-intro"><strong>${escapeHTML(period)}</strong><span>${escapeHTML(summary)}</span><small>Showing ${count} of at most 250 most relevant records</small></div>
+      ${tableMarkup(data.records,[['WHEN',(r)=>escapeHTML(formatTime(r.occurred_at))],['SOURCE',(r)=>escapeHTML(r.source_name||'Direct')],['DESTINATION',(r)=>escapeHTML(r.button_name||'—')],['COUNTRY',(r)=>escapeHTML(r.country||'Unknown')],['DEVICE',(r)=>escapeHTML(r.device||'Unknown')],['VISITOR',(r)=>`<code title="${attr(r.visitor_id)}">${escapeHTML(r.visitor_id.slice(0,12))}…</code>`]],'No records for this period.')}`;
+    qs('.metric-detail-loading',box).outerHTML=display;
+    translateAdmin(box,state.adminLang);
+  }catch(error){const box=state.modal&&qs('.metric-detail-loading',state.modal);if(box)box.textContent=error.message;}
+}
 function copyButton(text, label = 'Copy') { return `<button type="button" class="btn btn-subtle btn-copy" data-copy="${attr(text)}"><span>⧉</span> ${label}</button>`; }
 function linksTab() {
-  return `<section class="page-heading"><div><div class="eyebrow">YOUR DESTINATIONS</div><h1>My links<span class="heading-dot">.</span></h1><p>These are the buttons visitors see on your public page.</p></div><button class="btn btn-primary" data-add="buttons">+ Add a link</button></section>
+  return `<section class="page-heading"><div><div class="eyebrow">YOUR DESTINATIONS</div><h1>My links</h1><p>These are the buttons visitors see on your public page.</p></div><button class="btn btn-primary" data-add="buttons">+ Add a link</button></section>
     <div class="info-strip"><span>◎</span><div><strong>Two separate metrics.</strong> LinkHub tracks visits to your page and clicks on these buttons. Sample links are visible on the public page and lead to safe example.com addresses until replaced.</div></div>
-    <div class="manage-grid">${state.buttons.length ? state.buttons.map((item,index) => `<article class="manage-card"><div class="manage-card-left"><span class="manage-icon" style="background:${attr(item.accent)}">${escapeHTML(socialIcon(item.title))}</span><div><div class="manage-title">${escapeHTML(item.title)} <span class="mini-status ${item.active ? 'mini-on':'mini-off'}">${item.active ? 'Live' : 'Hidden'}</span></div><p>${escapeHTML(item.subtitle || item.url)}</p><small>${escapeHTML(item.category)} <span>·</span> ${escapeHTML(item.url)}</small></div></div><div class="manage-card-actions"><div class="order-controls"><button data-move="${item.id}" data-direction="up" ${index===0?'disabled':''} title="Move up">↑</button><button data-move="${item.id}" data-direction="down" ${index===state.buttons.length-1?'disabled':''} title="Move down">↓</button></div>${copyButton(`${location.origin}/out/${item.id}`,'Copy link') }<button class="btn btn-outline" data-edit="buttons" data-id="${item.id}">Edit</button><button class="btn btn-danger-ghost" data-delete="buttons" data-id="${item.id}">Delete</button></div></article>`).join('') : `<div class="public-empty"><h3>Nothing here yet.</h3><p>Add your first destination link.</p></div>`}</div>
+    <div class="manage-grid">${state.buttons.length ? state.buttons.map((item,index) => `<article class="manage-card"><div class="manage-card-left"><span class="manage-icon" style="background:${attr(item.accent)}">${iconTile(item)}</span><div><div class="manage-title">${escapeHTML(item.title)} <span class="mini-status ${item.active ? 'mini-on':'mini-off'}">${item.active ? 'Live' : 'Hidden'}</span></div><p>${escapeHTML(item.subtitle || item.url)}</p><small>${escapeHTML(item.category)} <span>·</span> ${escapeHTML(item.url)}</small></div></div><div class="manage-card-actions"><div class="order-controls"><button data-move="${item.id}" data-direction="up" ${index===0?'disabled':''} title="Move up">↑</button><button data-move="${item.id}" data-direction="down" ${index===state.buttons.length-1?'disabled':''} title="Move down">↓</button></div>${copyButton(`${location.origin}/out/${item.id}`,'Copy link') }<button class="btn btn-outline" data-edit="buttons" data-id="${item.id}">Edit</button><button class="btn btn-danger-ghost" data-delete="buttons" data-id="${item.id}">Delete</button></div></article>`).join('') : `<div class="public-empty"><h3>Nothing here yet.</h3><p>Add your first destination link.</p></div>`}</div>
     <p class="helper-note">Visitors open a button through a tracked <code>/out/ID</code> URL. You can edit the real destination without changing the button's tracking address.</p>`;
 }
 function sourceTab() {
-  return `<section class="page-heading"><div><div class="eyebrow">KNOW WHERE PEOPLE COME FROM</div><h1>Traffic sources<span class="heading-dot">.</span></h1><p>Share a different entry URL on each platform; every URL opens the same LinkHub page.</p></div><button class="btn btn-primary" data-add="sources">+ Add a source</button></section>
+  return `<section class="page-heading"><div><div class="eyebrow">KNOW WHERE PEOPLE COME FROM</div><h1>Traffic sources</h1><p>Share a different entry URL on each platform; every URL opens the same LinkHub page.</p></div><button class="btn btn-primary" data-add="sources">+ Add a source</button></section>
     <div class="info-strip"><span>↗</span><div><strong>Source attribution, not automatic referrer detection.</strong> A visit to <code>/source-one</code> is attributed to Source One even if the URL is shared elsewhere. Direct visitors use the homepage.</div></div>
     <div class="source-grid">${state.sources.map((source) => `<article class="source-card"><div class="source-card-top"><div class="source-symbol">${escapeHTML(socialIcon(source.name))}</div><span class="mini-status ${source.active ? 'mini-on':'mini-off'}">${source.active?'Live':'Paused'}</span></div><h3>${escapeHTML(source.name)}</h3><p class="source-url">${escapeHTML(`${location.origin}/${source.slug}`)}</p><div class="source-card-bottom">${copyButton(`${location.origin}/${source.slug}`, 'Copy URL')}<button class="btn btn-outline" data-edit="sources" data-id="${source.id}">Edit</button><button class="btn btn-danger-ghost" data-delete="sources" data-id="${source.id}">Delete</button></div></article>`).join('')}</div>`;
 }
 function appearanceTab() {
   const item = state.profile || {};
   const favicon = item.favicon_data ? '<span class="setting-status status-added">Custom favicon saved</span>' : '<span class="setting-status">Using the default icon</span>';
-  return `<section class="page-heading"><div><div class="eyebrow">MAKE IT YOURS</div><h1>Appearance<span class="heading-dot">.</span></h1><p>Update the profile and choose which elements appear on your public page.</p></div><a class="btn btn-outline" href="/" target="_blank" rel="noopener">View public page ↗</a></section>
+  return `<section class="page-heading"><div><div class="eyebrow">MAKE IT YOURS</div><h1>Appearance</h1><p>Update the profile and choose which elements appear on your public page.</p></div><a class="btn btn-outline" href="/" target="_blank" rel="noopener">View public page ↗</a></section>
     <section class="dash-panel appearance-panel"><div class="panel-title-row"><div><h2>Profile details</h2><p>Changes appear on all entry URLs immediately.</p></div><span class="panel-detail">PUBLIC PROFILE</span></div>
       <form id="profile-form" class="field-form"><div class="form-row"><label>Display name<input name="display_name" maxlength="80" required value="${attr(item.display_name || '')}" placeholder="Your page" /></label><label>Headline<input name="headline" maxlength="140" value="${attr(item.headline || '')}" placeholder="Everything in one place" /></label></div>
       <label>Bio<textarea name="bio" rows="3" maxlength="300" placeholder="Introduce yourself or your project">${escapeHTML(item.bio || '')}</textarea></label>
@@ -180,11 +238,7 @@ function appearanceTab() {
           <div class="favicon-action-row">${favicon}<button type="button" class="btn btn-outline" id="clear-favicon">Remove custom favicon</button></div></div></div>
         <input type="hidden" name="clear_favicon" value="0" />
       </section>
-      <section class="appearance-inner-panel"><h3>Top-of-page elements</h3><p>Control the branding and small tagline shown at the top of the public page.</p>
-        <label class="check-row"><input name="show_top_brand" type="checkbox" ${item.show_top_brand === 0 ? '' : 'checked'} /> Display top brand</label>
-        <label class="check-row"><input name="show_top_tagline" type="checkbox" ${item.show_top_tagline === 0 ? '' : 'checked'} /> Display top tagline</label>
-      </section>
-      <div class="form-row"><label>Accent color<input name="accent_color" type="color" value="${attr(item.accent_color || '#4267e9')}" /></label><div class="appearance-tip"><span>✳</span><p>Tip: a short headline and a handful of curated links usually work best.</p></div></div>
+      <div class="form-row"><label>Accent color<input name="accent_color" type="color" value="${attr(item.accent_color || '#4267e9')}" /></label><p class="appearance-tip">Used for highlights, link arrows, focus indicators and interactive details.</p></div>
       <div class="form-bottom"><button class="btn btn-primary" type="submit">Save appearance</button></div></form></section>`;
 }
 function renderAdmin() {
@@ -195,7 +249,7 @@ function renderAdmin() {
 }
 function loginView(configured) {
   document.title = 'Sign in · LinkHub';
-  app.innerHTML = `<main class="login-shell"><div class="login-glow"></div><div class="login-card"><a href="/" class="login-back">← Back to my page</a><div class="login-logo">↗</div><div class="eyebrow">PRIVATE WORKSPACE</div><h1>Welcome back<span class="heading-dot">.</span></h1><p>Sign in to manage your links and traffic analytics.</p><form id="login-form" class="login-form"><label>Password<div class="password-wrap"><input id="password" name="password" type="password" required autocomplete="current-password" placeholder="Enter your password"/><button type="button" class="password-toggle" id="toggle-password" aria-label="Show password">Show</button></div></label><button type="submit" class="btn btn-primary btn-wide">Sign in <span>→</span></button></form>${configured ? '' : '<div class="login-warning">Admin secrets are missing. Follow README.md to set up ADMIN_PASSWORD and SESSION_SECRET.</div>'}<div class="login-footer">LINKHUB <span>·</span> SECURE ADMIN AREA</div></div></main>`;
+  app.innerHTML = `<main class="login-shell"><div class="login-glow"></div><div class="login-card"><a href="/" class="login-back">← Back to my page</a><div class="login-logo">↗</div><div class="eyebrow">PRIVATE WORKSPACE</div><h1>Welcome back</h1><p>Sign in to manage your links and traffic analytics.</p><form id="login-form" class="login-form"><label>Password<div class="password-wrap"><input id="password" name="password" type="password" required autocomplete="current-password" placeholder="Enter your password"/><button type="button" class="password-toggle" id="toggle-password" aria-label="Show password">Show</button></div></label><button type="submit" class="btn btn-primary btn-wide">Sign in <span>→</span></button></form>${configured ? '' : '<div class="login-warning">Admin secrets are missing. Follow README.md to set up ADMIN_PASSWORD and SESSION_SECRET.</div>'}<div class="login-footer">LINKHUB <span>·</span> SECURE ADMIN AREA</div></div></main>`;
   translateAdmin(app, state.adminLang);
   qs('#toggle-password').onclick = () => { const input=qs('#password'), visible = input.type === 'password'; input.type=visible?'text':'password';qs('#toggle-password').textContent=visible?'Hide':'Show';qs('#toggle-password').setAttribute('aria-label',visible?'Hide password':'Show password'); };
   qs('#login-form').onsubmit = async (event) => {
@@ -231,16 +285,41 @@ function openEditor(type, existing = null) {
     <label>Destination URL<input name="url" type="url" required value="${attr(existing?.url || '')}" placeholder="https://example.com/your-resource" /></label>
     <label>Section / category<input name="category" value="${attr(existing?.category || 'Resources')}" placeholder="Resources" maxlength="50"/></label>
     <div class="form-color-field"><span>Card color</span><div class="color-choices">${palette.map(([color, title])=> `<label title="${title}" class="color-choice"><input type="radio" name="accent" value="${color}" ${(!existing?.accent ? color===palette[0][0] : existing.accent===color) ? 'checked':''}/><span style="background:${color}"></span></label>`).join('')}</div></div>
+    <section class="button-icon-settings"><h3>Button icon</h3><p>Automatic favicon from the destination, image URL, your own file, or the default arrow.</p>
+      <label>Icon mode<select name="icon_mode" id="button-icon-mode">
+        ${[['auto','Auto — destination favicon'],['url','Image URL'],['upload','Upload image'],['default','Default arrow']].map(([value,label])=>`<option value="${value}" ${value===(existing?.icon_mode||'auto')?'selected':''}>${label}</option>`).join('')}
+      </select></label>
+      <label class="icon-url-field">Image URL<input name="icon_url" type="url" placeholder="https://example.com/favicon.png" value="${attr(existing?.icon_url||'')}" /></label>
+      <label class="icon-upload-field">Upload PNG, WebP or ICO (60 KB max)<input id="button-icon-upload" type="file" accept=".png,.webp,.ico,image/png,image/webp,image/x-icon,image/vnd.microsoft.icon" /></label>
+      <div class="button-icon-hint" id="button-icon-hint"></div>
+    </section>
     <label class="check-row"><input type="checkbox" name="active" ${existing?.active === 1 ? 'checked' : ''}/> Visible on public page</label>`;
   modal(isSource ? (editing ? 'Edit source' : 'Add a traffic source') : (editing ? 'Edit button' : 'Add a destination'),
     `<form id="edit-item-form" class="field-form modal-form">${fields}<div class="modal-actions"><button type="button" class="btn btn-outline" data-close>Cancel</button><button type="submit" class="btn btn-primary">${editing ? 'Save changes' : 'Create'}</button></div></form>`);
+  const modeField=qs('#button-icon-mode');
+  const refreshIconSettings=()=>{
+    if(!modeField)return;
+    qs('.icon-url-field')?.classList.toggle('is-hidden',modeField.value!=='url');
+    qs('.icon-upload-field')?.classList.toggle('is-hidden',modeField.value!=='upload');
+    const help={auto:'Uses /favicon.ico from the destination website. Some websites do not provide one; the arrow is used instead.',url:'Provide the direct URL of an image file.',upload:'File is stored in D1 and served by LinkHub.',default:'Use the standard arrow icon.'};
+    qs('#button-icon-hint').textContent=help[modeField.value]||'';
+  };
+  modeField?.addEventListener('change',refreshIconSettings);
+  refreshIconSettings();
   qs('#edit-item-form').onsubmit=async(event)=>{
     event.preventDefault();
     const form=event.currentTarget;const values=Object.fromEntries(new FormData(form));
     const data=isSource ? {name:values.name,slug:values.slug.toLowerCase(),active:form.querySelector('[name="active"]').checked}
-      : {title:values.title,subtitle:values.subtitle,url:values.url,category:values.category,accent:values.accent,active:form.querySelector('[name="active"]').checked};
+      : {title:values.title,subtitle:values.subtitle,url:values.url,category:values.category,accent:values.accent,active:form.querySelector('[name="active"]').checked,
+          icon_mode:values.icon_mode||'auto', icon_url:values.icon_url||'', icon_data:existing?.icon_data||''};
     const submit=form.querySelector('[type="submit"]');submit.disabled=true;
-    try {await api(`/api/admin/${type}${editing ? '/'+existing.id:''}`,{method:editing?'PUT':'POST',data});closeModal();await refreshAdmin();toast(editing?'Changes saved':'Item created');}
+    try {
+      if(!isSource) {
+        const file=qs('#button-icon-upload')?.files?.[0];
+        if(file) data.icon_data=await readIconFile(file);
+        if(data.icon_mode==='upload' && !data.icon_data) throw new Error('Upload a PNG, WebP or ICO icon first');
+      }
+      await api(`/api/admin/${type}${editing ? '/'+existing.id:''}`,{method:editing?'PUT':'POST',data});closeModal();await refreshAdmin();toast(editing?'Changes saved':'Item created');}
     catch(error){toast(error.message,'error');submit.disabled=false;}
   };
 }
@@ -289,6 +368,7 @@ function wireAdmin() {
     qs(selector)?.addEventListener('change', updateAvatarPreview);
   }
   qsa('[data-tab]').forEach((el)=>el.onclick=()=>{state.tab=el.dataset.tab;renderAdmin();window.scrollTo(0,0);});
+  qsa('[data-metric]').forEach((el)=>el.onclick=()=>void metricDetails(el.dataset.metric));
   qsa('[data-period]').forEach((el)=>el.onclick=async()=>{
     state.period=el.dataset.period;
     try{state.overview=await api(`/api/admin/analytics?period=${state.period}`);renderAdmin();}
@@ -317,8 +397,7 @@ function wireAdmin() {
         favicon=await new Promise((resolve,reject) => { const reader=new FileReader(); reader.onload=()=>resolve(reader.result); reader.onerror=()=>reject(new Error('Could not read favicon'));reader.readAsDataURL(file); });
         if(/\.ico$/i.test(file.name) && !/^data:image\/(?:x-icon|vnd\.microsoft\.icon);/.test(favicon)) favicon=favicon.replace(/^data:[^;]+;/,'data:image/x-icon;');
       }
-      const data={...values, show_top_brand:form.querySelector('[name="show_top_brand"]').checked,
-        show_top_tagline:form.querySelector('[name="show_top_tagline"]').checked, favicon_data:favicon};
+      const data={...values, show_top_brand:false, show_top_tagline:false, favicon_data:favicon};
       delete data.clear_favicon;
       await api('/api/admin/profile',{method:'PUT',data});await refreshAdmin({analytics:false});toast('Public page updated');
     } catch(error){toast(error.message,'error');button.disabled=false;}

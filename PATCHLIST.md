@@ -1,39 +1,38 @@
-# LinkHub — Patch List
+# LinkHub · Release Notes
 
-All release notes are maintained in English. Releases follow Semantic Versioning.
+## v0.3.0 — Interface refinements, link icon controls and detailed analytics
+
+- Applied the profile accent color consistently across public-page highlights, link interactions and focus states.
+- Introduced a custom, keyboard-accessible public language dropdown.
+- Simplified the public header, group headings, decorative elements and document title.
+- Added per-destination icon configuration: automatic site favicon, image URL, uploaded image or fallback arrow.
+- Added validated icon storage and delivery via D1-backed Worker routes.
+- Made dashboard KPI cards interactive, opening authenticated event-detail dialogs for the selected period.
+- Added D1 migration `0003_button_icons.sql` without altering existing analytics records.
+- Improved responsiveness, event-detail table layout and keyboard focus behavior.
+- Expanded automated test coverage for destination icons and analytics details.
+
+**Commit:** `feat: add link icons and detailed dashboard metrics`  
+**Tag:** `v0.3.0`
 
 ---
 
-## v0.2.0 — International landing page and identity controls · 2026-10-30
+## v0.2.0 — Profile identity and public localization
 
-### Added
+- Added public translations for English, Japanese, German, Spanish and French.
+- Added configurable avatar appearance and an uploadable site favicon.
+- Added neutral, visible sample destinations.
+- Added migration `0002_public_identity.sql`.
 
-- Public interface language selector with English as default and Japanese, German, Spanish and French available.
-- Editable avatar tile text, background and shape, with optional external profile image.
-- Custom site favicon upload (PNG, ICO, WebP) from Appearance, served via a first-party Worker route and stored in D1.
-- Independent visibility controls for the public header mark and tagline.
-- Neutral, active example destinations on the landing page with safe `example.com` placeholder URLs.
-- Additional D1 migration for profile customization and preservation of existing deployments.
-- Automated tests for public example visibility, avatar settings and favicon validation.
-
-### Improved
-
-- Fixed Worker-first asset routing for dynamic source paths and custom icon requests.
-- Kept configured links, existing events, entry URLs and admin credentials intact during upgrade.
-- Updated technical documentation and neutral examples for a reusable, brand-agnostic project.
-
-**Commit:** `feat: add public localization and appearance controls`  
 **Tag:** `v0.2.0`
 
 ---
 
-## v0.1.0 — Initial MVP · 2026-10-30
+## v0.1.0 — Initial LinkHub release
 
-- Cloudflare Worker and D1-backed public profile with editable destinations.
-- Independent page-view and outbound-click analytics with entry-source attribution.
-- Basic dashboard, private admin, content management and example records.
-- Password-based sessions, bot filtering and first-party visitor identification.
-- Included initial schema, tests and deployment instructions.
+- Introduced a single-profile, hosted link landing page.
+- Implemented entry-source analytics and independent outbound click tracking.
+- Added protected administration, configurable sources and destination buttons.
+- Added Cloudflare Worker + D1 deployment and migration support.
 
-**Commit:** `feat: launch LinkHub MVP with source and outbound analytics`  
 **Tag:** `v0.1.0`
