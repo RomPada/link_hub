@@ -31,6 +31,16 @@ async function api(path, { method = 'GET', data } = {}) {
 }
 function monogram(name) { return (name || 'LH').split(/\s+/).slice(0, 2).map((x) => x[0]?.toUpperCase() || '').join(''); }
 function socialIcon() { return '↗'; }
+const globeSvg = `<svg class="globe-svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c-3 3-4 6-4 9s1 6 4 9M12 3c3 3 4 6 4 9s-1 6-4 9"/></svg>`;
+const chevronSvg = `<svg class="chevron-svg" viewBox="0 0 20 20" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 7 5 5 5-5"/></svg>`;
+function countryName(value) {
+  if (!value || value === 'Unknown') return 'Unknown';
+  const code = String(value).toUpperCase();
+  if (!/^[A-Z]{2}$/.test(code)) return value;
+  try { const name = new Intl.DisplayNames([state.adminLang === 'uk' ? 'uk' : 'en'], { type: 'region' }).of(code); return `${name || code} (${code})`; }
+  catch { return code; }
+}
+
 async function readIconFile(file) {
   if(file.size>61440)throw new Error('Icon must not exceed 60 KB');
   if(!/\.(png|webp|ico)$/i.test(file.name))throw new Error('Upload PNG, WebP or ICO');
@@ -58,7 +68,7 @@ function iconTile(button) {
   return `<span class="public-link-icon" style="--tile:${attr(button.accent)}">${src ? `<img src="${attr(src)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none';this.nextElementSibling.hidden=false" /><span class="icon-tile-fallback" hidden>↗</span>` : '↗'}</span>`;
 }
 function publicLanguageMenu(lang, t) {
-  return `<div class="language-menu"><button type="button" id="language-toggle" class="language-toggle" aria-expanded="false" aria-haspopup="listbox" aria-label="${attr(t.language)}"><span class="language-globe" aria-hidden="true">◎</span><span>${escapeHTML(publicLanguages.find(([code])=>code===lang)?.[1]||'English')}</span><span class="language-chevron" aria-hidden="true">⌄</span></button>
+  return `<div class="language-menu"><button type="button" id="language-toggle" class="language-toggle" aria-expanded="false" aria-haspopup="listbox" aria-label="${attr(t.language)}"><span class="language-globe" aria-hidden="true">${globeSvg}</span><span>${escapeHTML(publicLanguages.find(([code])=>code===lang)?.[1]||'English')}</span><span class="language-chevron" aria-hidden="true">${chevronSvg}</span></button>
   <div class="language-options" id="language-options" role="listbox" aria-label="${attr(t.language)}" hidden>${publicLanguages.map(([code,label])=>`<button type="button" role="option" aria-selected="${lang===code}" data-public-language="${code}" class="language-option${lang===code?' selected':''}"><span>${escapeHTML(label)}</span>${lang===code?'<span aria-hidden="true">✓</span>':''}</button>`).join('')}</div></div>`;
 }
 
@@ -148,17 +158,20 @@ function adminShell(content) {
       <div class="sidebar-spacer"></div>
       <a class="sidebar-visit" href="/" target="_blank" rel="noopener">View public page <span>↗</span></a>
       <button class="sidebar-logout" id="sign-out">Sign out <span>→</span></button>
-      <div class="sidebar-version">LINKHUB · v0.3.0</div>
+      <div class="sidebar-version">LINKHUB · v0.3.1</div>
     </aside>
     <div class="dash-main">
-      <header class="dash-topbar"><div class="dash-topbar-title">LINKHUB / <span>${escapeHTML(adminText(tabs.find((tab) => tab[0] === selected)[1],state.adminLang).toUpperCase())}</span></div><div class="dash-topbar-right"><label class="admin-lang-field"><span class="visually-hidden">Dashboard language</span><select id="admin-language" aria-label="Dashboard language"><option value="en" ${state.adminLang==='en'?'selected':''}>EN</option><option value="uk" ${state.adminLang==='uk'?'selected':''}>УКР</option></select></label><span class="pill-live"><i></i> LIVE</span></div></header>
+      <header class="dash-topbar"><div class="dash-topbar-title">LINKHUB / <span>${escapeHTML(adminText(tabs.find((tab) => tab[0] === selected)[1],state.adminLang).toUpperCase())}</span></div><div class="dash-topbar-right"><div class="admin-language-menu language-menu"><button type="button" class="language-toggle" id="admin-language-toggle" aria-expanded="false" aria-haspopup="listbox" aria-label="Dashboard language"><span class="language-globe" aria-hidden="true">${globeSvg}</span><span>${state.adminLang==='uk'?'Українська':'English'}</span><span class="language-chevron" aria-hidden="true">${chevronSvg}</span></button><div class="language-options" id="admin-language-options" role="listbox" aria-label="Dashboard language" hidden>${[['en','English'],['uk','Українська']].map(([lang,label])=>`<button type="button" class="language-option${state.adminLang===lang?' selected':''}" role="option" aria-selected="${state.adminLang===lang}" data-admin-language="${lang}"><span>${label}</span>${state.adminLang===lang?'<span aria-hidden="true">✓</span>':''}</button>`).join('')}</div></div><span class="pill-live"><i></i> LIVE</span></div></header>
       <div class="dashboard-content">${content}</div>
-      <footer class="dash-footer">LinkHub v0.3.0 <span>·</span> Cloudflare Workers + D1 <span>·</span> Your data, your links.</footer>
+      <footer class="dash-footer">LinkHub v0.3.1 <span>·</span> Cloudflare Workers + D1 <span>·</span> Your data, your links.</footer>
     </div>
   </div>`;
 }
 function metricCard(label, value, subtitle, icon, tone = '', metric = '') {
-  return `<button type="button" class="metric-card ${tone} metric-action" data-metric="${metric}" aria-label="${attr(label)} — view details"><span class="metric-top"><span>${escapeHTML(label)}</span><span class="metric-icon">${icon}</span></span><strong>${formatCount(value)}</strong><small>${escapeHTML(subtitle)}</small><span class="metric-more" aria-hidden="true">View details →</span></button>`;
+  const content = `<span class="metric-top"><span>${escapeHTML(label)}</span><span class="metric-icon">${icon}</span></span><strong>${formatCount(value)}</strong><span class="metric-bottom"><small>${escapeHTML(subtitle)}</small>${metric ? '<span class="metric-more">View details <span aria-hidden="true">→</span></span>' : ''}</span>`;
+  return metric
+    ? `<button type="button" class="metric-card ${tone} metric-action" data-metric="${metric}" aria-label="${attr(label)}">${content}</button>`
+    : `<article class="metric-card metric-static ${tone}">${content}</article>`;
 }
 function tableMarkup(items, columns, empty) {
   if (!items?.length) return `<div class="table-empty">${escapeHTML(empty || 'Nothing to show yet.')}</div>`;
@@ -181,15 +194,15 @@ function overview() {
   const { summary, sources, buttons, countries, chart, recent } = data;
   const rate = summary.views.total ? (summary.outbound.total / summary.views.total * 100).toFixed(1) : '0.0';
   return `<section class="page-heading"><div><div class="eyebrow">A CLEARER PICTURE OF YOUR TRAFFIC</div><h1>Overview</h1><p>Know where visitors arrive and what they choose next.</p></div>${periodPills()}</section>
-    <div class="metric-grid">${metricCard('Page views',summary.views.total,'Visits to your LinkHub','↗','metric-primary','views')}${metricCard('Unique visitors',summary.views.unique,'Distinct anonymous browser IDs','◎','','unique')}${metricCard('Outbound clicks',summary.outbound.total,'Clicks on your destination buttons','↗','','outbound')}${metricCard('Click-through rate',rate + '%','Outbound clicks ÷ page views','✧','','ctr')}</div>
+    <div class="metric-grid">${metricCard('Page views',summary.views.total,'Visits to your LinkHub','↗','metric-primary','views')}${metricCard('Unique visitors',summary.views.unique,'Distinct anonymous browser IDs','◎','','unique')}${metricCard('Outbound clicks',summary.outbound.total,'Clicks on your destination buttons','↗','','outbound')}${metricCard('Click-through rate',rate + '%','Outbound clicks ÷ page views','✧')}</div>
     <div class="dash-two-up"><section class="dash-panel chart-panel"><div class="panel-title-row"><div><h2>Traffic activity</h2><p>Last 14 days · Today first · UTC</p></div><div class="chart-legend"><span><i class="legend-views"></i>Views</span><span><i class="legend-clicks"></i>Clicks</span></div></div>${chartMarkup(chart)}</section>
     <section class="dash-panel"><div class="panel-title-row"><div><h2>Traffic sources</h2><p>Visits by entry link</p></div><span class="panel-detail">SOURCE MIX</span></div>${trendRows(sources,summary.views.total,'views')}</section></div>
     <div class="dash-two-up"><section class="dash-panel"><div class="panel-title-row"><div><h2>Destination clicks</h2><p>Which buttons people open</p></div><span class="panel-detail">BUTTONS</span></div>${trendRows(buttons,summary.outbound.total,'clicks')}</section>
-    <section class="dash-panel"><div class="panel-title-row"><div><h2>Visitor countries</h2><p>Based on Cloudflare's approximate location</p></div><span class="panel-detail">WORLDWIDE</span></div>${trendRows(countries,summary.views.total,'views')}</section></div>
-    <section class="dash-panel"><div class="panel-title-row"><div><h2>Recent activity</h2><p>Latest tracked views and outbound clicks</p></div><span class="panel-detail">${recent.length} RECORDS</span></div>${tableMarkup(recent,[['WHEN', (r) => `<span class="no-wrap">${escapeHTML(formatTime(r.occurred_at))}</span>`],['EVENT',(r)=> `<span class="event-pill ${r.kind === 'view' ? 'event-view':'event-outbound'}">${r.kind === 'view' ? 'Page view':'Outbound click'}</span>`],['ENTRY SOURCE',(r)=>escapeHTML(r.source_name)],['DESTINATION',(r)=>escapeHTML(r.button_name || '—')],['COUNTRY',(r)=>escapeHTML(r.country || 'Unknown')],['VISITOR',(r)=>`<code>${escapeHTML(r.visitor_id.slice(0,8))}…</code>`]],'Your first visit will appear here.')}</section>`;
+    <section class="dash-panel"><div class="panel-title-row"><div><h2>Visitor countries</h2><p>Based on Cloudflare's approximate location</p></div><span class="panel-detail">WORLDWIDE</span></div>${trendRows(countries.map(row=>({...row,name:countryName(row.name)})),summary.views.total,'views')}</section></div>
+    <section class="dash-panel"><div class="panel-title-row"><div><h2>Recent activity</h2><p>Latest tracked views and outbound clicks</p></div><span class="panel-detail">${recent.length} RECORDS</span></div>${tableMarkup(recent,[['WHEN', (r) => `<span class="no-wrap">${escapeHTML(formatTime(r.occurred_at))}</span>`],['EVENT',(r)=> `<span class="event-pill ${r.kind === 'view' ? 'event-view':'event-outbound'}">${r.kind === 'view' ? 'Page view':'Outbound click'}</span>`],['ENTRY SOURCE',(r)=>escapeHTML(r.source_name)],['DESTINATION',(r)=>escapeHTML(r.button_name || '—')],['COUNTRY',(r)=>escapeHTML(countryName(r.country))],['VISITOR',(r)=>`<code>${escapeHTML(r.visitor_id.slice(0,8))}…</code>`]],'Your first visit will appear here.')}</section>`;
 }
 async function metricDetails(metric) {
-  const titles={views:'Page views',unique:'Unique visitors',outbound:'Outbound clicks',ctr:'Click-through rate'};
+  const titles={views:'Page views',unique:'Unique visitors',outbound:'Outbound clicks'};
   const name=titles[metric]||'Details';
   modal(name,`<div class="metric-detail-loading">Loading events…</div>`);
   try {
@@ -199,12 +212,27 @@ async function metricDetails(metric) {
     box.classList.add('metric-detail-modal');
     const count=data.records.length;
     const period={today:'Today',week:'Last 7 days',month:'This month',all:'All time'}[state.period];
-    const summary=metric==='unique'?'One row per anonymous browser in this period':metric==='ctr'?'Outbound events contributing to outbound clicks ÷ page views':'Event log for this metric';
+    const summary=metric==='unique'?'One row per anonymous browser in this period':'Event log for this metric';
     const display=`<div class="metric-detail-intro"><strong>${escapeHTML(period)}</strong><span>${escapeHTML(summary)}</span><small>Showing ${count} of at most 250 most relevant records</small></div>
-      ${tableMarkup(data.records,[['WHEN',(r)=>escapeHTML(formatTime(r.occurred_at))],['SOURCE',(r)=>escapeHTML(r.source_name||'Direct')],['DESTINATION',(r)=>escapeHTML(r.button_name||'—')],['COUNTRY',(r)=>escapeHTML(r.country||'Unknown')],['DEVICE',(r)=>escapeHTML(r.device||'Unknown')],['VISITOR',(r)=>`<code title="${attr(r.visitor_id)}">${escapeHTML(r.visitor_id.slice(0,12))}…</code>`]],'No records for this period.')}`;
+      ${tableMarkup(data.records,[['WHEN',(r)=>escapeHTML(formatTime(r.occurred_at))],['SOURCE',(r)=>escapeHTML(r.source_name||'Direct')],['DESTINATION',(r)=>escapeHTML(r.button_name||'—')],['COUNTRY',(r)=>escapeHTML(countryName(r.country))],['DEVICE',(r)=>escapeHTML(r.device||'Unknown')],['VISITOR',(r)=>`<code title="${attr(r.visitor_id)}">${escapeHTML(r.visitor_id.slice(0,12))}…</code>`],['ACTIONS',(r)=>`<button type="button" class="btn btn-danger-ghost event-delete-button" data-delete-event="${Number(r.id)}" aria-label="Delete event">Delete</button>`]],'No records for this period.')}`;
     qs('.metric-detail-loading',box).outerHTML=display;
     translateAdmin(box,state.adminLang);
+    qsa('[data-delete-event]',box).forEach((button)=>button.addEventListener('click',()=>void confirmEventDeletion(Number(button.dataset.deleteEvent),metric)));
   }catch(error){const box=state.modal&&qs('.metric-detail-loading',state.modal);if(box)box.textContent=error.message;}
+}
+async function confirmEventDeletion(id, metric) {
+  if (!Number.isSafeInteger(id) || id <= 0) return;
+  modal('Delete analytics record?',`<p class="confirm-description">This event will be permanently deleted from analytics. All totals will be recalculated. This action cannot be undone.</p><div class="modal-actions"><button type="button" class="btn btn-outline" data-close>Cancel</button><button type="button" class="btn btn-danger" id="confirm-event-delete">Delete permanently</button></div>`);
+  qs('#confirm-event-delete').addEventListener('click',async(event)=>{
+    event.currentTarget.disabled=true;
+    try {
+      await api(`/api/admin/events/${id}`,{method:'DELETE'});
+      state.overview=await api(`/api/admin/analytics?period=${state.period}`);
+      renderAdmin();
+      toast('Analytics record deleted');
+      await metricDetails(metric);
+    } catch(error){toast(error.message,'error');event.currentTarget.disabled=false;}
+  });
 }
 function copyButton(text, label = 'Copy') { return `<button type="button" class="btn btn-subtle btn-copy" data-copy="${attr(text)}"><span>⧉</span> ${label}</button>`; }
 function linksTab() {
@@ -234,7 +262,7 @@ function appearanceTab() {
       </section>
       <section class="appearance-inner-panel"><h3>Site favicon</h3><p>Upload a PNG, WebP or ICO file (up to 60 KB). The icon is shown in browser tabs.</p>
         <div class="favicon-controls"><img id="favicon-preview" src="/site-icon?v=${encodeURIComponent(item.updated_at||0)}" alt="Current favicon" />
-          <div><label>Upload favicon<input id="favicon-upload" type="file" accept=".png,.webp,.ico,image/png,image/webp,image/x-icon,image/vnd.microsoft.icon" /></label>
+          <div><span class="file-field-title">Upload favicon</span><label class="file-picker" for="favicon-upload"><span class="file-picker-icon" aria-hidden="true">↑</span><span class="file-picker-action">Choose file</span><span class="file-picker-name" id="favicon-file-label">No file selected</span></label><input id="favicon-upload" class="visually-hidden-input" type="file" accept=".png,.webp,.ico,image/png,image/webp,image/x-icon,image/vnd.microsoft.icon" />
           <div class="favicon-action-row">${favicon}<button type="button" class="btn btn-outline" id="clear-favicon">Remove custom favicon</button></div></div></div>
         <input type="hidden" name="clear_favicon" value="0" />
       </section>
@@ -290,7 +318,7 @@ function openEditor(type, existing = null) {
         ${[['auto','Auto — destination favicon'],['url','Image URL'],['upload','Upload image'],['default','Default arrow']].map(([value,label])=>`<option value="${value}" ${value===(existing?.icon_mode||'auto')?'selected':''}>${label}</option>`).join('')}
       </select></label>
       <label class="icon-url-field">Image URL<input name="icon_url" type="url" placeholder="https://example.com/favicon.png" value="${attr(existing?.icon_url||'')}" /></label>
-      <label class="icon-upload-field">Upload PNG, WebP or ICO (60 KB max)<input id="button-icon-upload" type="file" accept=".png,.webp,.ico,image/png,image/webp,image/x-icon,image/vnd.microsoft.icon" /></label>
+      <div class="icon-upload-field"><span class="file-field-title">Upload PNG, WebP or ICO (60 KB max)</span><label class="file-picker" for="button-icon-upload"><span class="file-picker-icon" aria-hidden="true">↑</span><span class="file-picker-action">Choose file</span><span class="file-picker-name" id="button-file-label">No file selected</span></label><input class="visually-hidden-input" id="button-icon-upload" type="file" accept=".png,.webp,.ico,image/png,image/webp,image/x-icon,image/vnd.microsoft.icon" /></div>
       <div class="button-icon-hint" id="button-icon-hint"></div>
     </section>
     <label class="check-row"><input type="checkbox" name="active" ${existing?.active === 1 ? 'checked' : ''}/> Visible on public page</label>`;
@@ -304,6 +332,7 @@ function openEditor(type, existing = null) {
     const help={auto:'Uses /favicon.ico from the destination website. Some websites do not provide one; the arrow is used instead.',url:'Provide the direct URL of an image file.',upload:'File is stored in D1 and served by LinkHub.',default:'Use the standard arrow icon.'};
     qs('#button-icon-hint').textContent=help[modeField.value]||'';
   };
+  qs('#button-icon-upload')?.addEventListener('change',event=>{const label=qs('#button-file-label');if(label)label.textContent=event.target.files?.[0]?.name||'No file selected';});
   modeField?.addEventListener('change',refreshIconSettings);
   refreshIconSettings();
   qs('#edit-item-form').onsubmit=async(event)=>{
@@ -323,16 +352,23 @@ function openEditor(type, existing = null) {
     catch(error){toast(error.message,'error');submit.disabled=false;}
   };
 }
+let modalPreviousFocus = null;
 function modal(title, html) {
-  closeModal();
-  const overlay=document.createElement('div'); overlay.className='modal-overlay';overlay.innerHTML=`<div class="modal-card" role="dialog" aria-modal="true" aria-label="${attr(title)}"><div class="modal-heading"><h2>${escapeHTML(title)}</h2><button class="modal-x" data-close aria-label="Close dialog">×</button></div>${html}</div>`;
+  if (!state.modal) modalPreviousFocus=document.activeElement;
+  closeModal(false);
+  const overlay=document.createElement('div'); overlay.className='modal-overlay';overlay.innerHTML=`<div class="modal-card" role="dialog" aria-modal="true" aria-label="${attr(title)}" tabindex="-1"><div class="modal-heading"><h2>${escapeHTML(title)}</h2><button class="modal-x" data-close aria-label="Close dialog">×</button></div>${html}</div>`;
   document.body.append(overlay);state.modal=overlay;
   overlay.onclick=(event)=>{if(event.target===overlay || event.target.closest('[data-close]'))closeModal();};
-  overlay.onkeydown=(event)=>{if(event.key==='Escape')closeModal();};
   translateAdmin(overlay, state.adminLang);
-  qsa('input:not([type="hidden"]),textarea',overlay)[0]?.focus();
+  (qs('input:not([type="hidden"]),textarea',overlay) || qs('.modal-x',overlay))?.focus();
 }
-function closeModal() { state.modal?.remove();state.modal=null; }
+function closeModal(restoreFocus=true) {
+  state.modal?.remove();state.modal=null;
+  if (restoreFocus) {if(modalPreviousFocus?.isConnected) modalPreviousFocus.focus();modalPreviousFocus=null;}
+}
+document.addEventListener?.('keydown',event=>{
+  if (event.key==='Escape' && state.modal) {event.preventDefault();event.stopPropagation();closeModal();}
+});
 function askDelete(type,id) {
   const item=(type==='sources'?state.sources:state.buttons).find((obj)=>obj.id===id);
   if (!item) return;
@@ -352,17 +388,25 @@ function updateAvatarPreview() {
   else display.textContent=qs('[name="avatar_text"]')?.value || monogram(name);
 }
 function wireAdmin() {
-  qs('#admin-language')?.addEventListener('change', (event) => {
-    state.adminLang = event.target.value;
-    try { localStorage.setItem('linkhub_admin_lang',state.adminLang); } catch {}
+  const adminToggle=qs('#admin-language-toggle'),adminOptions=qs('#admin-language-options');
+  const closeAdminLanguage=()=>{if(!adminOptions)return;adminOptions.hidden=true;adminToggle?.setAttribute('aria-expanded','false');};
+  adminToggle?.addEventListener('click',()=>{adminOptions.hidden=!adminOptions.hidden;adminToggle.setAttribute('aria-expanded',String(!adminOptions.hidden));});
+  qsa('[data-admin-language]',adminOptions).forEach(button=>button.addEventListener('click',()=>{
+    state.adminLang=button.dataset.adminLanguage;
+    try {localStorage.setItem('linkhub_admin_lang',state.adminLang);} catch {}
     renderAdmin();
-  });
+    qs('#admin-language-toggle')?.focus();
+  }));
+  adminToggle?.addEventListener('keydown',event=>{if(event.key==='ArrowDown'){event.preventDefault();adminOptions.hidden=false;adminToggle.setAttribute('aria-expanded','true');qs('button',adminOptions)?.focus();}});
+  adminOptions?.addEventListener('keydown',event=>{const list=qsa('button',adminOptions),index=list.indexOf(document.activeElement);if(['ArrowUp','ArrowDown'].includes(event.key)){event.preventDefault();list[(index+(event.key==='ArrowDown'?1:-1)+list.length)%list.length]?.focus();}if(event.key==='Escape'){closeAdminLanguage();adminToggle.focus();}});
+  adminOptions?.addEventListener('focusout',()=>setTimeout(()=>{if(!document.activeElement?.closest('.admin-language-menu'))closeAdminLanguage();},100));
   qs('#clear-favicon')?.addEventListener('click', () => {
     qs('[name="clear_favicon"]').value = '1';
     qs('#favicon-upload').value = '';
+    if(qs('#favicon-file-label'))qs('#favicon-file-label').textContent='No file selected';
     qs('.favicon-action-row .setting-status').textContent='Default favicon will be restored on save';
   });
-  qs('#favicon-upload')?.addEventListener('change', () => { qs('[name="clear_favicon"]').value='0'; });
+  qs('#favicon-upload')?.addEventListener('change', (event) => { qs('[name="clear_favicon"]').value='0'; const name=qs('#favicon-file-label');if(name)name.textContent=event.target.files?.[0]?.name||'No file selected'; });
   for (const selector of ['[name="avatar_text"]','[name="avatar_background"]','[name="avatar_shape"]','[name="avatar_url"]','[name="display_name"]']) {
     qs(selector)?.addEventListener('input', updateAvatarPreview);
     qs(selector)?.addEventListener('change', updateAvatarPreview);

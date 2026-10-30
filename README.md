@@ -2,7 +2,7 @@
 
 A self-hosted, single-profile link landing page with independent analytics for incoming visits and outbound destination clicks. Built on **Cloudflare Workers**, **Cloudflare D1**, and lightweight browser-native HTML/CSS/JavaScript.
 
-**Version:** 0.3.0 · **Runtime:** Cloudflare Workers · **Database:** D1 (SQLite) · **Default public language:** English
+**Version:** 0.3.1 · **Runtime:** Cloudflare Workers · **Database:** D1 (SQLite) · **Default public language:** English
 
 ## Overview
 
@@ -17,7 +17,7 @@ These are independent metrics:
 | Outbound clicks | Clicks on a configured destination button |
 | Click-through rate | Outbound clicks divided by page views; not a per-visitor conversion rate |
 
-Source attribution reflects the entry URL used, not a verified upstream website. Country comes from Cloudflare's approximate country metadata. Analytics data contains anonymous browser identifiers, country codes, device categories, and timestamps; the app does not persist raw visitor IPs or HTTP referrer URLs.
+Source attribution reflects the entry URL used, not a verified upstream website. Country comes from Cloudflare's approximate country metadata. The dashboard displays human-readable names with ISO codes (such as Netherlands (NL)). For local development (`localhost`), country is recorded as unknown because a development proxy can otherwise be mistaken for a visitor's location. Cloudflare geolocation can also be affected by VPNs and proxies; historic country codes cannot be retroactively corrected. Analytics data contains anonymous browser identifiers, country codes, device categories, and timestamps; the app does not persist raw visitor IPs or HTTP referrer URLs.
 
 ## Features
 
@@ -28,14 +28,16 @@ Source attribution reflects the entry URL used, not a verified upstream website.
 - Destination icons: automatic `/favicon.ico` from the destination origin, custom image URL, upload (PNG/WebP/ICO, up to 60 KiB), or the default arrow. A missing auto icon falls back to the arrow.
 - Editable browser favicon (PNG/WebP/ICO), stored in D1.
 - Live accent color applied to highlights, link arrows, and interactive states.
-- Language selector for English (default), Japanese, German, Spanish, and French. Interface copy is localized; user-authored names and descriptions are not translated automatically.
+- SVG-based language selector with a centered globe/chevron for English (default), Japanese, German, Spanish, and French. Interface copy is localized; user-authored names and descriptions are not translated automatically.
 
 **Administration and analytics**
 
 - Password-based admin login and revocable sessions; same-origin checks for data-changing requests and login rate limiting.
 - Create, edit, pause, and delete entry sources and destination buttons; reorder buttons.
 - Analytics periods: Today, 7 days, This month, All time (UTC boundaries).
-- Interactive dashboard cards: select Page views, Unique visitors, Outbound clicks, or CTR to open event details for the selected period (up to 250 records).
+- Interactive dashboard cards for Page views, Unique visitors and Outbound clicks: open detailed event logs for the selected period (up to 250 records). CTR is a read-only calculated metric with no detail dialog.
+- Individual event deletion with confirmation (permanent, authenticated, reflected immediately in analytics).
+- Human-readable country names next to ISO country codes and keyboard-accessible admin language selector.
 - Source, destination, and country rankings, a 14-day chart (today first), and recent events.
 - English / Ukrainian admin interface; default English.
 
@@ -43,7 +45,7 @@ Source attribution reflects the entry URL used, not a verified upstream website.
 
 - No runtime dependency on third-party analytics products.
 - No React/Next.js build step; assets are deployed with one Worker.
-- D1 migration files are additive and applied using Wrangler.
+- D1 migration files are additive and applied using Wrangler. v0.3.1 does not require a new migration.
 - Runs on Cloudflare Free plans within the platform's request and database limits. A `*.workers.dev` deployment doesn't require a purchased domain.
 
 ## Requirements

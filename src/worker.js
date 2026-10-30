@@ -1,4 +1,4 @@
-/** LinkHub v0.3.0 — one Cloudflare Worker + D1 + static assets.
+/** LinkHub v0.3.1 — one Cloudflare Worker + D1 + static assets.
  * Analytics counts page visits and outbound button clicks separately.
  * No raw IP addresses or HTTP referrers are stored.
  */
@@ -47,8 +47,13 @@ function visitorFrom(request) {
   return existing && validVisitorId(existing) ? { value: existing, created: false } : { value: crypto.randomUUID(), created: true };
 }
 function countryFrom(request) {
-  const value = request.cf?.country;
-  return typeof value === 'string' && /^[A-Z]{2}$/.test(value) && value !== 'XX' ? value : null;
+  // Cloudflare supplies a geolocated ISO country in production. A local Worker
+  // cannot reliably identify the visitor's real country (and may report the
+  // development proxy's country), so we intentionally display Unknown there.
+  const hostname = new URL(request.url).hostname;
+  if (['localhost', '127.0.0.1', '::1'].includes(hostname) || hostname.endsWith('.localhost')) return null;
+  const value = request.cf?.country || request.headers.get('CF-IPCountry');
+  return typeof value === 'string' && /^[A-Z]{2}$/.test(value) && value !== 'XX' && value !== 'T1' ? value : null;
 }
 function shouldCount(request) {
   const ua = request.headers.get('User-Agent') || '';
@@ -305,9 +310,9 @@ async function adminApi(request, env, path, method) {
   if (path === 'analytics/details' && method === 'GET') {
     const params = new URL(request.url).searchParams;
     const metric = params.get('metric');
-    if (!['views','unique','outbound','ctr'].includes(metric)) return fail('Unknown metric');
+    if (!['views','unique','outbound'].includes(metric)) return fail('Unknown metric');
     const start = periodStart(periodName(params.get('period')));
-    const kind = metric === 'outbound' || metric === 'ctr' ? 'outbound' : 'view';
+    const kind = metric === 'outbound' ? 'outbound' : 'view';
     // A row per browser for Unique visitors, newest activity for other metrics.
     const sql = metric === 'unique'
       ? `SELECT e.id,e.kind,e.source_name,e.button_name,e.country,e.device,e.visitor_id,e.occurred_at
@@ -323,6 +328,13 @@ async function adminApi(request, env, path, method) {
       ? await env.DB.prepare(sql).bind(start,start).all()
       : await env.DB.prepare(sql).bind(kind,start).all();
     return json({ metric, period:periodName(params.get('period')), records:results.results, limit:250 });
+  }
+  if (path.startsWith('events/') && method === 'DELETE') {
+    const rawId = path.slice('events/'.length);
+    if (!/^[1-9]\d{0,15}$/.test(rawId) || !Number.isSafeInteger(Number(rawId))) return fail('Invalid event ID', 400);
+    const result = await env.DB.prepare('DELETE FROM events WHERE id = ?').bind(Number(rawId)).run();
+    if (!result.meta.changes) return fail('Event not found', 404);
+    return json({ ok: true, deleted: Number(rawId) });
   }
   if (path === 'profile' && method === 'PUT') {
     const data = verifyAdminPayload(path, method, await bodyJson(request, 128000));

@@ -1,5 +1,22 @@
 # LinkHub · Release Notes
 
+## v0.3.1 — Language controls, country display and event management
+
+- Replaced font-dependent globe and dropdown characters with consistent SVG icons, with centered chevron rotation.
+- Redesigned the admin-language picker to match the public language menu, with keyboard navigation.
+- Improved country presentation using human-readable country names alongside ISO codes; mark localhost traffic as unknown instead of using a proxy's country.
+- Added global Escape handling and focus restoration for analytics dialogs.
+- Kept CTR as a non-interactive calculation, while Page views, Unique visitors and Outbound clicks retain detail dialogs.
+- Fixed KPI-card layouts so the localized “View details” link no longer overlaps card descriptions.
+- Added per-event permanent deletion with confirmation and refreshed analytics, for both page views and outbound clicks.
+- Replaced default file inputs with a styled, accessible picker for favicon and destination icon uploads.
+- No database migration required.
+
+**Commit:** `fix: polish language controls and add event deletion`  
+**Tag:** `v0.3.1`
+
+---
+
 ## v0.3.0 — Interface refinements, link icon controls and detailed analytics
 
 - Applied the profile accent color consistently across public-page highlights, link interactions and focus states.

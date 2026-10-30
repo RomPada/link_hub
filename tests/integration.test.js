@@ -175,7 +175,7 @@ test('link icon modes can be configured and uploaded icon is served only for pub
   assert.equal(bad.status,400);
 });
 
-test('KPI details are authenticated and distinguish page views, unique visitors, outbound events and CTR events',async()=>{
+test('KPI details are authenticated and distinguish page views, unique visitors and outbound events',async()=>{
   const {sqlite,env,ctx,req}=setup();
   const timestamp=Date.now();
   const insert=sqlite.prepare('INSERT INTO events(kind,source_name,button_name,visitor_id,country,device,occurred_at) VALUES(?,?,?,?,?,?,?)');
@@ -186,7 +186,7 @@ test('KPI details are authenticated and distinguish page views, unique visitors,
   assert.equal((await worker.fetch(req('/api/admin/analytics/details?metric=views&period=today'),env,ctx())).status,401);
   const login=await worker.fetch(req('/api/admin/login',{method:'POST',body:{password:env.ADMIN_PASSWORD}}),env,ctx());
   const session=login.headers.get('set-cookie').split(';')[0];
-  for(const [metric,count] of [['views',3],['unique',2],['outbound',1],['ctr',1]]) {
+  for(const [metric,count] of [['views',3],['unique',2],['outbound',1]]) {
     const response=await worker.fetch(req(`/api/admin/analytics/details?metric=${metric}&period=today`,{cookie:session}),env,ctx());
     assert.equal(response.status,200,await response.clone().text());
     const data=await response.json();
@@ -194,6 +194,45 @@ test('KPI details are authenticated and distinguish page views, unique visitors,
     assert.equal(data.metric,metric);
     assert.equal(data.records[0].country===null,false);
   }
+  const noCtrDetails=await worker.fetch(req('/api/admin/analytics/details?metric=ctr',{cookie:session}),env,ctx());
+  assert.equal(noCtrDetails.status,400);
   const invalid=await worker.fetch(req('/api/admin/analytics/details?metric=bad',{cookie:session}),env,ctx());
   assert.equal(invalid.status,400);
+});
+
+
+test('individual analytics record deletion requires authentication and same-origin request', async () => {
+  const {sqlite,env,ctx,req}=setup();
+  const stamp=Date.now();
+  sqlite.prepare('INSERT INTO events(kind,source_name,visitor_id,country,device,occurred_at) VALUES(?,?,?,?,?,?)').run('view','Source One','visitor-test','DE','Mobile',stamp);
+  sqlite.prepare('INSERT INTO events(kind,source_name,visitor_id,country,device,occurred_at) VALUES(?,?,?,?,?,?)').run('outbound','Source One','visitor-test','DE','Mobile',stamp);
+  const before=sqlite.prepare('SELECT id, kind FROM events ORDER BY id').all();
+  assert.equal(before.length,2);
+  const forbidden=await worker.fetch(req(`/api/admin/events/${before[0].id}`,{method:'DELETE'}),env,ctx());
+  assert.equal(forbidden.status,401);
+  const login=await worker.fetch(req('/api/admin/login',{method:'POST',body:{password:env.ADMIN_PASSWORD}}),env,ctx());
+  const session=login.headers.get('set-cookie').split(';')[0];
+  const crossOrigin=new Request(`${ORIGIN}/api/admin/events/${before[0].id}`,{method:'DELETE',headers:{Cookie:session,Origin:'https://other.example'}});
+  assert.equal((await worker.fetch(crossOrigin,env,ctx())).status,403);
+  const badId=await worker.fetch(req('/api/admin/events/abc',{method:'DELETE',cookie:session}),env,ctx());
+  assert.equal(badId.status,400);
+  const result=await worker.fetch(req(`/api/admin/events/${before[0].id}`,{method:'DELETE',cookie:session}),env,ctx());
+  assert.equal(result.status,200,await result.text());
+  assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM events').get().n,1);
+  assert.equal(sqlite.prepare('SELECT kind FROM events').get().kind,'outbound');
+  const notFound=await worker.fetch(req(`/api/admin/events/${before[0].id}`,{method:'DELETE',cookie:session}),env,ctx());
+  assert.equal(notFound.status,404);
+  const metrics=await (await worker.fetch(req('/api/admin/analytics?period=today',{cookie:session}),env,ctx())).json();
+  assert.equal(metrics.summary.views.total,0);
+  assert.equal(metrics.summary.outbound.total,1);
+});
+
+test('country metadata uses Cloudflare production country and local visits are unknown',async()=>{
+  const {sqlite,env,ctx}=setup();
+  const prodReq=new Request(`${ORIGIN}/source-one`,{headers:{'User-Agent':'Mozilla/5.0','CF-IPCountry':'JP'}});
+  const run=ctx();await worker.fetch(prodReq,env,run);await run.settled();
+  assert.equal(sqlite.prepare('SELECT country FROM events ORDER BY id DESC LIMIT 1').get().country,'JP');
+  const local=new Request('http://localhost:8787/source-one',{headers:{'User-Agent':'Mozilla/5.0','CF-IPCountry':'NL'}});
+  const localCtx=ctx();await worker.fetch(local,env,localCtx);await localCtx.settled();
+  assert.equal(sqlite.prepare('SELECT country FROM events ORDER BY id DESC LIMIT 1').get().country,null);
 });

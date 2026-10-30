@@ -1,6 +1,7 @@
 /** Client-side language option for the private admin, English remains default. */
 const lexicon = {
-  'View details':'Переглянути деталі','Analytics period':'Період аналітики',
+  'View details':'Переглянути деталі',
+  'ACTIONS':'ДІЇ','Delete event':'Видалити подію','Delete analytics record?':'Видалити запис аналітики?','Analytics record deleted':'Запис аналітики видалено','Choose file':'Обрати файл','No file selected':'Файл не вибрано','Analytics period':'Період аналітики',
   'Overview':'Огляд','My links':'Мої посилання','Traffic sources':'Джерела трафіку','Appearance':'Оформлення',
   'WORKSPACE':'РОБОЧИЙ ПРОСТІР','PERSONAL CONTROL CENTER':'ПАНЕЛЬ КЕРУВАННЯ','View public page':'Переглянути публічну сторінку','Sign out':'Вийти',
   'Open page':'Відкрити сторінку','LIVE':'ОНЛАЙН','A CLEARER PICTURE OF YOUR TRAFFIC':'АНАЛІТИКА ТВОГО ТРАФІКУ',
@@ -82,6 +83,7 @@ Object.assign(lexicon, {
   'File is stored in D1 and served by LinkHub.':'Файл зберігається в D1 та віддається через LinkHub.',
   'Use the standard arrow icon.':'Використовувати стандартну стрілку.',
   'View details':'Переглянути деталі',
+  'ACTIONS':'ДІЇ','Delete event':'Видалити подію','Delete analytics record?':'Видалити запис аналітики?','Analytics record deleted':'Запис аналітики видалено','Choose file':'Обрати файл','No file selected':'Файл не вибрано',
   'Loading events…':'Завантаження подій…',
   'One row per anonymous browser in this period':'Один рядок на анонімний браузер за період',
   'Outbound events contributing to outbound clicks ÷ page views':'Вихідні події, які формують частку кліків від переглядів',
