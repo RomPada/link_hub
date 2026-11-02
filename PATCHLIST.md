@@ -1,5 +1,20 @@
 # LinkHub · Release Notes
 
+## v0.5.4 — Remove unused UI styles and stale text resources
+
+- Removed 42 obsolete CSS rules / 44 selector entries associated with discontinued grouping, the previous public header and superseded navigation controls.
+- Preserved declarations and media-query placement for every active CSS selector, including responsive layouts, notifications and current menus.
+- Removed 15 unused locale fields from the five public-language dictionaries and two stale or duplicate admin translation entries.
+- Improved the cache-version test to read the actual project version instead of hardcoding an old release number.
+- Added regression tests for active PWA and favicon resource dependencies and the preserved dynamic error-toast class.
+- Kept public fallback favicon files and both sets of PWA icons because they remain referenced by working features; no artwork or favicon behavior was changed.
+- No API, D1 schema or migration, Web Push, authentication, analytics, routing or design changes. No new secrets or database migration required.
+
+**Commit:** `refactor: remove unused styles and stale translations`  
+**Tag:** `v0.5.4`
+
+---
+
 ## v0.5.3 — Consistent application identity and independent public favicon
 
 - Replaced the arrow tile in the admin sidebar with the new LinkHub application icon, including the mobile header.

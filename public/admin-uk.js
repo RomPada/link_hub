@@ -5,7 +5,7 @@ const lexicon = {
   'Notifications':'Сповіщення',
   'Overview':'Огляд','My links':'Мої посилання','Traffic sources':'Джерела трафіку','Appearance':'Оформлення',
   'WORKSPACE':'РОБОЧИЙ ПРОСТІР','PERSONAL CONTROL CENTER':'ПАНЕЛЬ КЕРУВАННЯ','View public page':'Переглянути публічну сторінку','Sign out':'Вийти',
-  'Open page':'Відкрити сторінку','LIVE':'ОНЛАЙН','A CLEARER PICTURE OF YOUR TRAFFIC':'АНАЛІТИКА ТВОГО ТРАФІКУ',
+  'LIVE':'ОНЛАЙН','A CLEARER PICTURE OF YOUR TRAFFIC':'АНАЛІТИКА ТВОГО ТРАФІКУ',
   'Know where visitors arrive and what they choose next.':'Дивись, звідки приходять відвідувачі та які ресурси вони обирають.',
   'Today':'Сьогодні','Yesterday':'Вчора','7 days':'7 днів','This month':'Цей місяць','All time':'Увесь час',
   'Page views':'Перегляди сторінки','Unique visitors':'Унікальні відвідувачі','Outbound clicks':'Вихідні кліки','Click-through rate':'CTR',
@@ -99,7 +99,6 @@ Object.assign(lexicon, {
 Object.assign(lexicon, {
  'Manage all destination buttons in one ordered list.':'Керуй усіма кнопками в одному впорядкованому списку.',
  'LinkHub records page visits and tracked destination clicks independently.':'LinkHub окремо фіксує відвідування сторінки та кліки на зовнішні ресурси.',
- 'Profile header':'Шапка профілю',
  'Customize the cover artwork, avatar and identity — just like a social profile.':'Налаштовуй обкладинку, аватар і дані профілю — як у соціальній мережі.',
  'Public profile preview':'Попередній перегляд профілю',
  'Cover image URL':'URL зображення обкладинки',

@@ -1,10 +1,10 @@
 # LinkHub
 
-> **Current version: v0.5.3.** LinkHub uses a fixed, rounded-square icon with transparent outer corners for the admin dashboard, admin PWA, and public-page footer. The public page's **browser favicon remains configurable** under **Appearance → Site favicon**. Admin and public icon preferences are independent. No D1 migration is required for this update.
+> **Current version: v0.5.4.** LinkHub uses a fixed, rounded-square icon with transparent outer corners for the admin dashboard, admin PWA, and public-page footer. The public page's **browser favicon remains configurable** under **Appearance → Site favicon**. Admin and public icon preferences are independent. No D1 migration is required for this update.
 
 A self-hosted, single-profile link landing page with independent analytics for incoming visits and outbound destination clicks. Built on **Cloudflare Workers**, **Cloudflare D1**, and lightweight browser-native HTML/CSS/JavaScript.
 
-**Version:** 0.5.3 · **Runtime:** Cloudflare Workers · **Database:** D1 (SQLite) · **Default public language:** English
+**Version:** 0.5.4 · **Runtime:** Cloudflare Workers · **Database:** D1 (SQLite) · **Default public language:** English
 
 ## Overview
 
@@ -55,7 +55,7 @@ Source attribution reflects the entry URL used, not a verified upstream website.
 
 - No runtime dependency on third-party analytics products.
 - No React/Next.js build step; assets are deployed with one Worker.
-- D1 migration files are additive and applied using Wrangler. v0.5.0 introduced device subscriptions (`0005_notifications.sql`); v0.5.3 does not change the database schema.
+- D1 migration files are additive and applied using Wrangler. v0.5.0 introduced device subscriptions (`0005_notifications.sql`); v0.5.4 does not change the database schema.
 - Runs on Cloudflare Free plans within the platform's request and database limits. A `*.workers.dev` deployment doesn't require a purchased domain.
 
 ## Requirements
@@ -66,7 +66,7 @@ Source attribution reflects the entry URL used, not a verified upstream website.
 
 ## Upgrade from v0.5.2
 
-Keep the existing GitHub repository, Cloudflare Worker, D1 database, `database_id` in `wrangler.jsonc`, `.dev.vars` and production secrets. **No D1 migration or VAPID key rotation is required for v0.5.3.**
+Keep the existing GitHub repository, Cloudflare Worker, D1 database, `database_id` in `wrangler.jsonc`, `.dev.vars` and production secrets. **No D1 migration or VAPID key rotation is required for v0.5.4.**
 
 ```bash
 npm install

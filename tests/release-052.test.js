@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 const js = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
 const css = readFileSync(new URL('../public/styles.css', import.meta.url), 'utf8');
 const page = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
@@ -37,6 +38,6 @@ test('recent activity includes the device field like the details table', () => {
   assert.match(js.slice(start,end), /\['DEVICE',\(r\)=>escapeHTML\(r\.device \|\| 'Unknown'\)\]/);
 });
 test('frontend assets are cache-busted to release version', () => {
-  assert.match(page, /styles\.css\?v=0\.5\.3/);
-  assert.match(page, /app\.js\?v=0\.5\.3/);
+  assert.ok(page.includes(`/styles.css?v=${version}`));
+  assert.ok(page.includes(`/app.js?v=${version}`));
 });

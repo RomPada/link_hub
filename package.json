@@ -1,6 +1,6 @@
 {
   "name": "linkhub",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "private": true,
   "type": "module",
   "description": "Single-page link hub with source and outbound analytics on Cloudflare Workers and D1",
