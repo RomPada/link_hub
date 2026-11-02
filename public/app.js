@@ -136,7 +136,7 @@ async function renderPublic() {
         <div class="profile-divider"><span>${escapeHTML(t.explore)}</span><span class="divider-line"></span></div>
         <div class="public-groups"><div class="public-links">${links.length ? links.map((button)=>linkCard(button,t)).join('') : `
           <div class="public-empty"><span class="public-empty-icon">↗</span><h3>${escapeHTML(t.emptyTitle)}</h3><p>${escapeHTML(t.emptyBody)}</p></div>`}</div></div>
-        <footer class="public-footer"><span>${escapeHTML(t.footer)}</span><a href="/" aria-label="LinkHub home">LINKHUB <span aria-hidden="true">↗</span></a></footer>
+        <footer class="public-footer"><span>${escapeHTML(t.footer)}</span><a class="public-footer-brand" href="/" aria-label="LinkHub home"><img src="/icons/admin-48.png" alt="" width="26" height="26" decoding="async" /> <span>LINKHUB</span></a></footer>
       </main></div>`;
     const toggle=qs('#language-toggle'),options=qs('#language-options');
     function closeLanguages() {options.hidden=true;toggle.setAttribute('aria-expanded','false');}
@@ -166,19 +166,19 @@ function adminShell(content) {
   const selected = state.tab;
   return `<div class="dashboard-shell">
     <aside class="sidebar">
-      <div class="sidebar-brand"><div class="sidebar-brand-icon">↗</div><div><strong>LinkHub</strong><span>PERSONAL CONTROL CENTER</span></div></div>
+      <div class="sidebar-brand"><div class="sidebar-brand-icon"><img src="/icons/admin-96.png" alt="" width="44" height="44" decoding="async" /></div><div><strong>LinkHub</strong><span>PERSONAL CONTROL CENTER</span></div></div>
       <div class="sidebar-label">WORKSPACE</div>
       <button type="button" class="mobile-section-switch" id="mobile-nav-toggle" aria-expanded="false" aria-controls="dashboard-navigation" aria-label="Open navigation menu"><span class="mobile-burger-icon" aria-hidden="true"><i></i><i></i><i></i></span><span class="mobile-switch-text"><span class="mobile-switch-title">${state.adminLang==='uk'?'Меню':'Menu'}</span><span class="mobile-switch-current">${escapeHTML(adminText(tabs.find(([id])=>id===selected)[1],state.adminLang))}</span></span></button>
       <nav id="dashboard-navigation" aria-label="Dashboard navigation" class="sidebar-nav">${tabs.map(([id, title, icon]) => `<button class="nav-item${id === selected ? ' nav-active' : ''}" data-tab="${id}"><span class="nav-item-icon">${icon}</span>${title}</button>`).join('')}<div class="mobile-nav-actions"><a class="sidebar-visit" href="/" target="_blank" rel="noopener noreferrer" aria-label="Open public site in browser">View public page <span aria-hidden="true">↗</span></a><button type="button" class="sidebar-logout" data-sign-out>Sign out <span aria-hidden="true">→</span></button></div></nav>
       <div class="sidebar-spacer"></div>
       <a class="sidebar-visit" href="/" target="_blank" rel="noopener">View public page <span>↗</span></a>
       <button class="sidebar-logout" id="sign-out" data-sign-out>Sign out <span>→</span></button>
-      <div class="sidebar-version">LINKHUB · v0.5.2</div>
+      <div class="sidebar-version">LINKHUB · v0.5.3</div>
     </aside>
     <div class="dash-main">
       <header class="dash-topbar"><div class="dash-topbar-title">LINKHUB / <span>${escapeHTML(adminText(tabs.find((tab) => tab[0] === selected)[1],state.adminLang).toUpperCase())}</span></div><div class="dash-topbar-right"><div class="admin-language-menu language-menu"><button type="button" class="language-toggle" id="admin-language-toggle" aria-expanded="false" aria-haspopup="listbox" aria-label="Dashboard language"><span class="language-globe" aria-hidden="true">${globeSvg}</span><span>${state.adminLang==='uk'?'Українська':'English'}</span><span class="language-chevron" aria-hidden="true">${chevronSvg}</span></button><div class="language-options" id="admin-language-options" role="listbox" aria-label="Dashboard language" hidden>${[['en','English'],['uk','Українська']].map(([lang,label])=>`<button type="button" class="language-option${state.adminLang===lang?' selected':''}" role="option" aria-selected="${state.adminLang===lang}" data-admin-language="${lang}"><span>${label}</span>${state.adminLang===lang?'<span aria-hidden="true">✓</span>':''}</button>`).join('')}</div></div><span class="pill-live"><i></i> LIVE</span></div></header>
       <div class="dashboard-content">${content}</div>
-      <footer class="dash-footer">LinkHub v0.5.2 <span>·</span> Cloudflare Workers + D1 <span>·</span> Your data, your links.</footer>
+      <footer class="dash-footer">LinkHub v0.5.3 <span>·</span> Cloudflare Workers + D1 <span>·</span> Your data, your links.</footer>
     </div>
   </div>`;
 }
@@ -407,7 +407,7 @@ function renderAdmin() {
 }
 function loginView(configured) {
   document.title = 'Sign in · LinkHub';
-  app.innerHTML = `<main class="login-shell"><div class="login-glow"></div><div class="login-card"><a href="/" class="login-back">← Back to my page</a><div class="login-logo">↗</div><div class="eyebrow">PRIVATE WORKSPACE</div><h1>Welcome back</h1><p>Sign in to manage your links and traffic analytics.</p><form id="login-form" class="login-form"><label>Password<div class="password-wrap"><input id="password" name="password" type="password" required autocomplete="current-password" placeholder="Enter your password"/><button type="button" class="password-toggle" id="toggle-password" aria-label="Show password">Show</button></div></label><button type="submit" class="btn btn-primary btn-wide">Sign in <span>→</span></button></form>${configured ? '' : '<div class="login-warning">Admin secrets are missing. Follow README.md to set up ADMIN_PASSWORD and SESSION_SECRET.</div>'}<div class="login-footer">LINKHUB <span>·</span> SECURE ADMIN AREA</div></div></main>`;
+  app.innerHTML = `<main class="login-shell"><div class="login-glow"></div><div class="login-card"><a href="/" class="login-back">← Back to my page</a><div class="login-logo"><img src="/icons/admin-96.png" alt="" width="50" height="50" /></div><div class="eyebrow">PRIVATE WORKSPACE</div><h1>Welcome back</h1><p>Sign in to manage your links and traffic analytics.</p><form id="login-form" class="login-form"><label>Password<div class="password-wrap"><input id="password" name="password" type="password" required autocomplete="current-password" placeholder="Enter your password"/><button type="button" class="password-toggle" id="toggle-password" aria-label="Show password">Show</button></div></label><button type="submit" class="btn btn-primary btn-wide">Sign in <span>→</span></button></form>${configured ? '' : '<div class="login-warning">Admin secrets are missing. Follow README.md to set up ADMIN_PASSWORD and SESSION_SECRET.</div>'}<div class="login-footer">LINKHUB <span>·</span> SECURE ADMIN AREA</div></div></main>`;
   document.documentElement.lang='en'; // Login is English even when the admin UI preference is Ukrainian.
   qs('#toggle-password').onclick = () => { const input=qs('#password'), visible = input.type === 'password'; input.type=visible?'text':'password';qs('#toggle-password').textContent=visible?'Hide':'Show';qs('#toggle-password').setAttribute('aria-label',visible?'Hide password':'Show password'); };
   qs('#login-form').onsubmit = async (event) => {

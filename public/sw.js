@@ -7,8 +7,8 @@ self.addEventListener('push', event => {
   const safeUrl = typeof payload.url === 'string' && payload.url.startsWith('/admn') ? payload.url : '/admn';
   event.waitUntil(self.registration.showNotification(String(payload.title).slice(0,100), {
     body: String(payload.body).slice(0,250),
-    icon: '/icons/icon-192.png',
-    badge: '/icons/icon-192.png',
+    icon: '/icons/admin-192.png',
+    badge: '/icons/admin-192.png',
     data: { url: safeUrl },
     tag: payload.tag || undefined,
   }));

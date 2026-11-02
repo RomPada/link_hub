@@ -37,6 +37,6 @@ test('recent activity includes the device field like the details table', () => {
   assert.match(js.slice(start,end), /\['DEVICE',\(r\)=>escapeHTML\(r\.device \|\| 'Unknown'\)\]/);
 });
 test('frontend assets are cache-busted to release version', () => {
-  assert.match(page, /styles\.css\?v=0\.5\.2/);
-  assert.match(page, /app\.js\?v=0\.5\.2/);
+  assert.match(page, /styles\.css\?v=0\.5\.3/);
+  assert.match(page, /app\.js\?v=0\.5\.3/);
 });

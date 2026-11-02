@@ -1,8 +1,10 @@
 # LinkHub
 
+> **Current version: v0.5.3.** LinkHub uses a permanent visual mark for its admin dashboard, admin PWA, and public-page footer. The public page's **browser favicon remains configurable** under **Appearance → Site favicon**. Admin and public icon preferences are independent. No D1 migration is required for this update.
+
 A self-hosted, single-profile link landing page with independent analytics for incoming visits and outbound destination clicks. Built on **Cloudflare Workers**, **Cloudflare D1**, and lightweight browser-native HTML/CSS/JavaScript.
 
-**Version:** 0.5.2 · **Runtime:** Cloudflare Workers · **Database:** D1 (SQLite) · **Default public language:** English
+**Version:** 0.5.3 · **Runtime:** Cloudflare Workers · **Database:** D1 (SQLite) · **Default public language:** English
 
 ## Overview
 
@@ -53,7 +55,7 @@ Source attribution reflects the entry URL used, not a verified upstream website.
 
 - No runtime dependency on third-party analytics products.
 - No React/Next.js build step; assets are deployed with one Worker.
-- D1 migration files are additive and applied using Wrangler. v0.5.0 introduced device subscriptions (`0005_notifications.sql`); v0.5.2 does not change the database schema.
+- D1 migration files are additive and applied using Wrangler. v0.5.0 introduced device subscriptions (`0005_notifications.sql`); v0.5.3 does not change the database schema.
 - Runs on Cloudflare Free plans within the platform's request and database limits. A `*.workers.dev` deployment doesn't require a purchased domain.
 
 ## Requirements
@@ -62,11 +64,9 @@ Source attribution reflects the entry URL used, not a verified upstream website.
 - npm, a Cloudflare account, and Wrangler (installed through `npm install`).
 - An existing D1 database for upgrades, or a new database for first installation.
 
-## Upgrade from v0.5.1
+## Upgrade from v0.5.2
 
-Keep your current GitHub repository, Worker, D1 database, `.dev.vars`, `wrangler.jsonc` database ID, and existing production secrets. **No database migration or VAPID key rotation is required for v0.5.2.**
-
-Run:
+Keep the existing GitHub repository, Cloudflare Worker, D1 database, `database_id` in `wrangler.jsonc`, `.dev.vars` and production secrets. **No D1 migration or VAPID key rotation is required for v0.5.3.**
 
 ```bash
 npm install
@@ -74,13 +74,13 @@ npm test
 npm run dev
 ```
 
-If the local app looks correct, publish the changed Worker and frontend files:
+Verify that the private `/admn` interface uses the new LinkHub mark, and that the public page footer also shows that mark. In **Appearance → Site favicon**, upload a public favicon to change the public browser tab icon; this must not change the private admin icon. Then publish the update:
 
 ```bash
 npm run deploy
 ```
 
-Reopen the Android admin PWA at `/admn`. Use the mobile burger menu to open the public page in a browser or sign out. Under Notifications, the device, source and interval selectors now have styled menus. Existing VAPID keys and subscriptions are unchanged. If the test is rejected, read the exact HTTP status and consult the troubleshooting steps below. Cloudflare returns an HTTP response indicating that the browser push service **accepted** the encrypted message; this does not guarantee an Android system notification was shown.
+The installed admin PWA uses separate branded icon assets. Browser and Android launcher caches may retain the former icon temporarily; reopen the PWA, and if needed remove and reinstall the admin shortcut to refresh its icon. This affects the launcher icon only and does not erase server-side links, statistics or push subscriptions.
 
 ## Quick start: local development
 

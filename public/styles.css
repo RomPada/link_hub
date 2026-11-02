@@ -367,3 +367,45 @@
   .notification-select-options{max-height:min(260px,48dvh)}
 }
 @media(prefers-reduced-motion:reduce){.notification-select-chevron{transition:none}}
+
+
+/* v0.5.3 — fixed LinkHub brand icon, independent from the editable public site favicon */
+.sidebar-brand-icon,
+.login-logo {
+  background: transparent;
+  overflow: hidden;
+  box-shadow: none;
+}
+.sidebar-brand-icon img,
+.login-logo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: inherit;
+}
+.public-footer .public-footer-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  white-space: nowrap;
+  color: #687e9f;
+  text-decoration: none;
+}
+.public-footer-brand img {
+  display: block;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border-radius: 8px;
+}
+.public-footer a.public-footer-brand span {
+  margin: 0;
+  color: inherit;
+}
+@media (max-width: 480px) {
+  .public-footer { gap: 12px; }
+  .public-footer .public-footer-brand { gap: 6px; }
+  .public-footer-brand img { width: 23px; height: 23px; }
+}

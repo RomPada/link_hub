@@ -1,5 +1,5 @@
 import { sendWebPush, validPushSubscription, decodeB64url } from "./web-push.js";
-/** LinkHub v0.5.2 — one Cloudflare Worker + D1 + static assets.
+/** LinkHub v0.5.3 — one Cloudflare Worker + D1 + static assets.
  * Analytics counts page visits and outbound button clicks separately.
  * No raw IP addresses or HTTP referrers are stored.
  */
@@ -343,7 +343,9 @@ async function landing(request, env, ctx, source = null, track = true) {
   );
   if (!asset.ok) return new Response('index.html was not found', { status: 500 });
   const pageBody = track || request.method === 'HEAD' ? asset.body
-    : (await asset.text()).replace('href="/manifest.webmanifest"', 'href="/admin.webmanifest"');
+    : (await asset.text())
+        .replace('href="/manifest.webmanifest"', 'href="/admin.webmanifest"')
+        .replace('href="/site-icon"', 'href="/icons/admin-favicon.ico?v=0.5.3"');
   const pageHeaders = new Headers(asset.headers);
   if (!track) { pageHeaders.delete('Content-Length'); pageHeaders.delete('ETag'); }
   const response = noStore(new Response(request.method === 'HEAD' ? null : pageBody, { status: asset.status, headers: pageHeaders }));

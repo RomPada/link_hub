@@ -1,5 +1,19 @@
 # LinkHub · Release Notes
 
+## v0.5.3 — Consistent application identity and independent public favicon
+
+- Replaced the arrow tile in the admin sidebar with the new LinkHub application icon, including the mobile header.
+- Added the same icon to the admin login screen and next to the LinkHub name in the public-page footer.
+- Updated the installed Android admin PWA icon and notification icon with separate admin-specific assets.
+- Added a dedicated favicon for the admin browser tab without changing the public site's configurable favicon (`/site-icon`).
+- Kept **Appearance → Site favicon** as the single control for the public browser favicon. User-uploaded favicon data and other profile settings are preserved.
+- Updated frontend cache versions. No D1 migration, new secrets, or VAPID key rotation is required.
+
+**Commit:** `fix: apply LinkHub branding to admin and public footer`  
+**Tag:** `v0.5.3`
+
+---
+
 ## v0.5.2 — Today's analytics, mobile navigation actions and notification controls
 
 - Set the default dashboard analytics period to **Today** when opening the admin panel.
