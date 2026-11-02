@@ -344,8 +344,8 @@ async function landing(request, env, ctx, source = null, track = true) {
   if (!asset.ok) return new Response('index.html was not found', { status: 500 });
   const pageBody = track || request.method === 'HEAD' ? asset.body
     : (await asset.text())
-        .replace('href="/manifest.webmanifest"', 'href="/admin.webmanifest"')
-        .replace('href="/site-icon"', 'href="/icons/admin-favicon.ico?v=0.5.3"');
+        .replace('href="/manifest.webmanifest"', 'href="/admin.webmanifest?icon=clear-bg"')
+        .replace('href="/site-icon"', 'href="/icons/admin-favicon.ico?icon=clear-bg"');
   const pageHeaders = new Headers(asset.headers);
   if (!track) { pageHeaders.delete('Content-Length'); pageHeaders.delete('ETag'); }
   const response = noStore(new Response(request.method === 'HEAD' ? null : pageBody, { status: asset.status, headers: pageHeaders }));

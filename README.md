@@ -1,6 +1,6 @@
 # LinkHub
 
-> **Current version: v0.5.3.** LinkHub uses a permanent visual mark for its admin dashboard, admin PWA, and public-page footer. The public page's **browser favicon remains configurable** under **Appearance → Site favicon**. Admin and public icon preferences are independent. No D1 migration is required for this update.
+> **Current version: v0.5.3.** LinkHub uses a fixed, rounded-square icon with transparent outer corners for the admin dashboard, admin PWA, and public-page footer. The public page's **browser favicon remains configurable** under **Appearance → Site favicon**. Admin and public icon preferences are independent. No D1 migration is required for this update.
 
 A self-hosted, single-profile link landing page with independent analytics for incoming visits and outbound destination clicks. Built on **Cloudflare Workers**, **Cloudflare D1**, and lightweight browser-native HTML/CSS/JavaScript.
 

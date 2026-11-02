@@ -119,7 +119,7 @@ test('admin route gets its own installable manifest and no page-view event',asyn
   const env={DB,ASSETS:{fetch:async()=>new Response('<link rel="manifest" href="/manifest.webmanifest" />',{headers:{'Content-Type':'text/html'}})}};
   const context=ctx();const resp=await worker.fetch(req('/admn'),env,context);
   assert.equal(resp.status,200);
-  assert.match(await resp.text(),/href="\/admin.webmanifest"/);
+  assert.match(await resp.text(),/href="\/admin.webmanifest\?icon=clear-bg"/);
   assert.equal(context.pending.length,0);
 });
 
