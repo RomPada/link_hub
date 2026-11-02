@@ -2,7 +2,7 @@
 
 A self-hosted, single-profile link landing page with independent analytics for incoming visits and outbound destination clicks. Built on **Cloudflare Workers**, **Cloudflare D1**, and lightweight browser-native HTML/CSS/JavaScript.
 
-**Version:** 0.5.1 · **Runtime:** Cloudflare Workers · **Database:** D1 (SQLite) · **Default public language:** English
+**Version:** 0.5.2 · **Runtime:** Cloudflare Workers · **Database:** D1 (SQLite) · **Default public language:** English
 
 ## Overview
 
@@ -34,26 +34,26 @@ Source attribution reflects the entry URL used, not a verified upstream website.
 
 - Password-based admin login and revocable sessions; same-origin checks for data-changing requests and login rate limiting.
 - Create, edit, pause, and delete entry sources and destination buttons. The admin and public page use the same unified ordering; the up/down controls reorder across the entire list.
-- Analytics periods: Today, 7 days, This month, All time (UTC boundaries).
+- Analytics periods: Today (the default when opening the admin dashboard), 7 days, This month, All time (UTC boundaries).
 - Interactive dashboard cards for Page views, Unique visitors and Outbound clicks: open detailed event logs for the selected period (up to 250 records). CTR is a read-only calculated metric with no detail dialog.
 - Individual event deletion with confirmation (permanent, authenticated, reflected immediately in analytics).
 - Human-readable country names next to ISO country codes and keyboard-accessible admin language selector.
-- Source, destination, and country rankings, a 14-day chart (today first), and recent events.
+- Source, destination, and country rankings, a 14-day chart (today first, with scrollable, angled labels on narrow screens), and recent events showing device type.
 - English / Ukrainian admin interface; default English. The `/admn` login page is always English.
 - Installable **LinkHub Admin** PWA with its own `/admn` manifest and a service worker for browser push notifications.
-- Dedicated **Notifications** workspace: up to 8 subscribed administrator devices, test pushes, per-device enable/mute, page visits, new unique visitors and outbound clicks; source filters and 0/1/5/15-minute throttling.
+- Dedicated **Notifications** workspace with keyboard-operable custom selectors for device, source and delivery interval: up to 8 subscribed administrator devices, test pushes, per-device enable/mute, page visits, new unique visitors and outbound clicks; source filters and 0/1/5/15-minute throttling.
 - Web Push uses VAPID and Web Crypto without a paid push service. No notification permission is requested from public visitors.
 
 **Appearance and layout**
 
 - The full-width Appearance form includes a social-profile preview and controls for cover image URL/upload/removal, avatar image URL/upload/removal, fallback letters, avatar shape, and accent color.
-- The public-page shortcut remains available in the sidebar, without a duplicate action inside Appearance. Mobile navigation uses a full-width sticky header with a burger-menu button instead of horizontally scrolling tabs. The menu stays accessible while the page scrolls.
+- The public-page shortcut remains available in the sidebar, without a duplicate action inside Appearance. Mobile navigation uses a full-width sticky header with a burger-menu button instead of horizontally scrolling tabs. The menu stays accessible while the page scrolls and includes Open public page (new browser tab) and Sign out.
 
 **Operational design**
 
 - No runtime dependency on third-party analytics products.
 - No React/Next.js build step; assets are deployed with one Worker.
-- D1 migration files are additive and applied using Wrangler. v0.5.0 introduced device subscriptions (`0005_notifications.sql`); v0.5.1 does not change the database schema.
+- D1 migration files are additive and applied using Wrangler. v0.5.0 introduced device subscriptions (`0005_notifications.sql`); v0.5.2 does not change the database schema.
 - Runs on Cloudflare Free plans within the platform's request and database limits. A `*.workers.dev` deployment doesn't require a purchased domain.
 
 ## Requirements
@@ -62,9 +62,9 @@ Source attribution reflects the entry URL used, not a verified upstream website.
 - npm, a Cloudflare account, and Wrangler (installed through `npm install`).
 - An existing D1 database for upgrades, or a new database for first installation.
 
-## Upgrade from v0.5.0
+## Upgrade from v0.5.1
 
-Keep your current GitHub repository, Worker, D1 database, `.dev.vars`, `wrangler.jsonc` database ID, and existing production secrets. **No database migration or VAPID key rotation is required for v0.5.1.**
+Keep your current GitHub repository, Worker, D1 database, `.dev.vars`, `wrangler.jsonc` database ID, and existing production secrets. **No database migration or VAPID key rotation is required for v0.5.2.**
 
 Run:
 
@@ -80,7 +80,7 @@ If the local app looks correct, publish the changed Worker and frontend files:
 npm run deploy
 ```
 
-Reopen the Android admin PWA at `/admn` and use **Notifications → Send test**. The original VAPID key pair and subscribed device should continue to work. If the test is rejected, read the exact HTTP status and consult the troubleshooting steps below. Cloudflare returns an HTTP response indicating that the browser push service **accepted** the encrypted message; this does not guarantee an Android system notification was shown.
+Reopen the Android admin PWA at `/admn`. Use the mobile burger menu to open the public page in a browser or sign out. Under Notifications, the device, source and interval selectors now have styled menus. Existing VAPID keys and subscriptions are unchanged. If the test is rejected, read the exact HTTP status and consult the troubleshooting steps below. Cloudflare returns an HTTP response indicating that the browser push service **accepted** the encrypted message; this does not guarantee an Android system notification was shown.
 
 ## Quick start: local development
 
@@ -276,11 +276,9 @@ Paste each value at Wrangler's prompt. Never commit `.dev.vars` or private VAPID
 
 If you see a D1 table error after upgrading, run the correct migration (`npm run db:local` for local development or `npm run db:remote` for production) **before launching the new Worker**. For missing push notifications, check the real HTTPS deployment, VAPID configuration, Android permissions and **Send test**. If you rotate VAPID keys, re-enable push on every device.
 
-### v0.5.1: push delivery troubleshooting
+### Push delivery diagnostics
 
-The previous build sent browser push requests using `redirect: "error"`, which is not supported by Cloudflare Workers. v0.5.1 uses `redirect: "manual"` so push requests can reach the browser's push service. No VAPID rotation and no new D1 migration are necessary.
-
-1. Deploy this update with `npm run deploy`. Confirm the Worker is updated, then open the installed LinkHub Admin PWA on Android at `/admn`.
+1. Verify your Worker is deployed with `npm run deploy`, then open the LinkHub Admin PWA on Android at `/admn`.
 2. Go to **Notifications**, confirm notifications are enabled on your phone, and press **Send test**. The endpoint must be registered, Android notification permission must be granted, and your device must have connectivity.
 3. A successful test means **accepted by the push service**, not guaranteed delivery to Android. If it is accepted but unseen, check Android Settings → Apps → LinkHub Admin (or Chrome) → Notifications, any browser-site permissions, and battery/background restrictions.
 4. HTTP **401/403** from the push service: check that the three production secrets `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, and `VAPID_SUBJECT` match your existing key pair, and that the subject contains a valid contact address. Do not expose the private key in logs or GitHub.

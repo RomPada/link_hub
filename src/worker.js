@@ -1,5 +1,5 @@
 import { sendWebPush, validPushSubscription, decodeB64url } from "./web-push.js";
-/** LinkHub v0.5.1 — one Cloudflare Worker + D1 + static assets.
+/** LinkHub v0.5.2 — one Cloudflare Worker + D1 + static assets.
  * Analytics counts page visits and outbound button clicks separately.
  * No raw IP addresses or HTTP referrers are stored.
  */

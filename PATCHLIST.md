@@ -1,5 +1,20 @@
 # LinkHub · Release Notes
 
+## v0.5.2 — Today's analytics, mobile navigation actions and notification controls
+
+- Set the default dashboard analytics period to **Today** when opening the admin panel.
+- Added **View public page** (opens in a new browser tab) and **Sign out** to the sticky mobile burger menu, while preserving their desktop sidebar actions.
+- Improved the mobile 14-day traffic chart with horizontal scrolling and angled, readable date labels.
+- Replaced browser-native **Device**, **Traffic source**, and **Minimum interval** selects in Notifications with styled, accessible dropdowns that preserve existing values and save behavior.
+- Added **DEVICE** to the Recent activity table, matching the detailed analytics view.
+- Updated frontend asset version strings to avoid serving obsolete styles in the installed PWA.
+- No database migration is required; previous push subscriptions and VAPID keys are retained.
+
+**Commit:** `fix: polish mobile navigation and notification settings`  
+**Tag:** `v0.5.2`
+
+---
+
 ## v0.5.1 — Reliable Web Push requests and sticky mobile navigation
 
 - Fixed Web Push submission on Cloudflare Workers by replacing the unsupported `redirect: "error"` setting with `redirect: "manual"`.

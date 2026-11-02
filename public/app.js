@@ -9,7 +9,7 @@ if (typeof window !== 'undefined') {
   window.addEventListener('beforeinstallprompt', event => { if (!adminMode) return; event.preventDefault(); deferredInstall = event; document.getElementById('install-admin')?.removeAttribute('disabled'); });
   window.addEventListener('appinstalled', () => { deferredInstall = null; if (state.tab==='notifications') renderAdmin(); });
 }
-const state = { notifications: null, pushDevice: null, adminLang: getAdminLanguage(), publicLang: storedPublicLanguage(), tab: 'overview', period: 'week', overview: null, profile: null, sources: [], buttons: [], busy: false, modal: null };
+const state = { notifications: null, pushDevice: null, adminLang: getAdminLanguage(), publicLang: storedPublicLanguage(), tab: 'overview', period: 'today', overview: null, profile: null, sources: [], buttons: [], busy: false, modal: null };
 
 const palette = [
   ['#e9eefc', 'Icy blue'], ['#f9e8e7', 'Soft coral'], ['#f9edd7', 'Honey'],
@@ -169,16 +169,16 @@ function adminShell(content) {
       <div class="sidebar-brand"><div class="sidebar-brand-icon">↗</div><div><strong>LinkHub</strong><span>PERSONAL CONTROL CENTER</span></div></div>
       <div class="sidebar-label">WORKSPACE</div>
       <button type="button" class="mobile-section-switch" id="mobile-nav-toggle" aria-expanded="false" aria-controls="dashboard-navigation" aria-label="Open navigation menu"><span class="mobile-burger-icon" aria-hidden="true"><i></i><i></i><i></i></span><span class="mobile-switch-text"><span class="mobile-switch-title">${state.adminLang==='uk'?'Меню':'Menu'}</span><span class="mobile-switch-current">${escapeHTML(adminText(tabs.find(([id])=>id===selected)[1],state.adminLang))}</span></span></button>
-      <nav id="dashboard-navigation" aria-label="Dashboard navigation" class="sidebar-nav">${tabs.map(([id, title, icon]) => `<button class="nav-item${id === selected ? ' nav-active' : ''}" data-tab="${id}"><span class="nav-item-icon">${icon}</span>${title}</button>`).join('')}</nav>
+      <nav id="dashboard-navigation" aria-label="Dashboard navigation" class="sidebar-nav">${tabs.map(([id, title, icon]) => `<button class="nav-item${id === selected ? ' nav-active' : ''}" data-tab="${id}"><span class="nav-item-icon">${icon}</span>${title}</button>`).join('')}<div class="mobile-nav-actions"><a class="sidebar-visit" href="/" target="_blank" rel="noopener noreferrer" aria-label="Open public site in browser">View public page <span aria-hidden="true">↗</span></a><button type="button" class="sidebar-logout" data-sign-out>Sign out <span aria-hidden="true">→</span></button></div></nav>
       <div class="sidebar-spacer"></div>
       <a class="sidebar-visit" href="/" target="_blank" rel="noopener">View public page <span>↗</span></a>
-      <button class="sidebar-logout" id="sign-out">Sign out <span>→</span></button>
-      <div class="sidebar-version">LINKHUB · v0.5.1</div>
+      <button class="sidebar-logout" id="sign-out" data-sign-out>Sign out <span>→</span></button>
+      <div class="sidebar-version">LINKHUB · v0.5.2</div>
     </aside>
     <div class="dash-main">
       <header class="dash-topbar"><div class="dash-topbar-title">LINKHUB / <span>${escapeHTML(adminText(tabs.find((tab) => tab[0] === selected)[1],state.adminLang).toUpperCase())}</span></div><div class="dash-topbar-right"><div class="admin-language-menu language-menu"><button type="button" class="language-toggle" id="admin-language-toggle" aria-expanded="false" aria-haspopup="listbox" aria-label="Dashboard language"><span class="language-globe" aria-hidden="true">${globeSvg}</span><span>${state.adminLang==='uk'?'Українська':'English'}</span><span class="language-chevron" aria-hidden="true">${chevronSvg}</span></button><div class="language-options" id="admin-language-options" role="listbox" aria-label="Dashboard language" hidden>${[['en','English'],['uk','Українська']].map(([lang,label])=>`<button type="button" class="language-option${state.adminLang===lang?' selected':''}" role="option" aria-selected="${state.adminLang===lang}" data-admin-language="${lang}"><span>${label}</span>${state.adminLang===lang?'<span aria-hidden="true">✓</span>':''}</button>`).join('')}</div></div><span class="pill-live"><i></i> LIVE</span></div></header>
       <div class="dashboard-content">${content}</div>
-      <footer class="dash-footer">LinkHub v0.5.1 <span>·</span> Cloudflare Workers + D1 <span>·</span> Your data, your links.</footer>
+      <footer class="dash-footer">LinkHub v0.5.2 <span>·</span> Cloudflare Workers + D1 <span>·</span> Your data, your links.</footer>
     </div>
   </div>`;
 }
@@ -196,7 +196,7 @@ function periodPills() { return `<div class="period-pills" role="group" aria-lab
 function chartMarkup(chart) {
   const max = Math.max(1, ...chart.map((row) => Number(row.views)), ...chart.map((row) => Number(row.outbound)));
   const bars = chart.map((row, index) => `<div class="chart-day" title="${row.day}: ${row.views} views, ${row.outbound} clicks"><div class="chart-bars"><div class="chart-bar chart-view" style="height:${row.views ? Math.max(5, row.views / max * 100) : 0}%"></div><div class="chart-bar chart-click" style="height:${row.outbound ? Math.max(5, row.outbound / max * 100) : 0}%"></div></div><span>${index === 0 ? 'Today' : index === 1 ? 'Yesterday' : relativeDate(row.day)}</span></div>`).join('');
-  return `<div class="chart"><div class="chart-grid-lines"><i></i><i></i><i></i><i></i></div><div class="chart-days">${bars}</div></div>`;
+  return `<div class="chart" tabindex="0" role="region" aria-label="Traffic activity chart; swipe horizontally to see older days"><div class="chart-grid-lines"><i></i><i></i><i></i><i></i></div><div class="chart-days">${bars}</div></div>`;
 }
 function trendRows(items, total, prefix = '') {
   if (!items?.length) return '<div class="table-empty">No activity in this period yet.</div>';
@@ -214,7 +214,7 @@ function overview() {
     <section class="dash-panel"><div class="panel-title-row"><div><h2>Traffic sources</h2><p>Visits by entry link</p></div><span class="panel-detail">SOURCE MIX</span></div>${trendRows(sources,summary.views.total,'views')}</section></div>
     <div class="dash-two-up"><section class="dash-panel"><div class="panel-title-row"><div><h2>Destination clicks</h2><p>Which buttons people open</p></div><span class="panel-detail">BUTTONS</span></div>${trendRows(buttons,summary.outbound.total,'clicks')}</section>
     <section class="dash-panel"><div class="panel-title-row"><div><h2>Visitor countries</h2><p>Based on Cloudflare's approximate location</p></div><span class="panel-detail">WORLDWIDE</span></div>${trendRows(countries.map(row=>({...row,name:countryName(row.name)})),summary.views.total,'views')}</section></div>
-    <section class="dash-panel"><div class="panel-title-row"><div><h2>Recent activity</h2><p>Latest tracked views and outbound clicks</p></div><span class="panel-detail">${recent.length} RECORDS</span></div>${tableMarkup(recent,[['#',(r,index)=>String(index+1)],['WHEN', (r) => `<span class="no-wrap">${escapeHTML(formatTime(r.occurred_at))}</span>`],['EVENT',(r)=> `<span class="event-pill ${r.kind === 'view' ? 'event-view':'event-outbound'}">${r.kind === 'view' ? 'Page view':'Outbound click'}</span>`],['ENTRY SOURCE',(r)=>escapeHTML(r.source_name)],['DESTINATION',(r)=>escapeHTML(r.button_name || '—')],['COUNTRY',(r)=>escapeHTML(countryName(r.country))],['VISITOR',(r)=>`<code>${escapeHTML(r.visitor_id.slice(0,8))}…</code>`]],'Your first visit will appear here.')}</section>`;
+    <section class="dash-panel"><div class="panel-title-row"><div><h2>Recent activity</h2><p>Latest tracked views and outbound clicks</p></div><span class="panel-detail">${recent.length} RECORDS</span></div>${tableMarkup(recent,[['#',(r,index)=>String(index+1)],['WHEN', (r) => `<span class="no-wrap">${escapeHTML(formatTime(r.occurred_at))}</span>`],['EVENT',(r)=> `<span class="event-pill ${r.kind === 'view' ? 'event-view':'event-outbound'}">${r.kind === 'view' ? 'Page view':'Outbound click'}</span>`],['ENTRY SOURCE',(r)=>escapeHTML(r.source_name)],['DESTINATION',(r)=>escapeHTML(r.button_name || '—')],['COUNTRY',(r)=>escapeHTML(countryName(r.country))],['DEVICE',(r)=>escapeHTML(r.device || 'Unknown')],['VISITOR',(r)=>`<code>${escapeHTML(r.visitor_id.slice(0,8))}…</code>`]],'Your first visit will appear here.')}</section>`;
 }
 async function metricDetails(metric) {
   const titles={views:'Page views',unique:'Unique visitors',outbound:'Outbound clicks'};
@@ -335,7 +335,7 @@ function notificationsTab() {
   </div>
   <section class="dash-panel notification-settings"><div class="panel-title-row"><div><h2>Notification preferences</h2><p>Choose a registered device and what it should receive.</p></div><span class="panel-detail">${connected.length} / 8 DEVICES</span></div>
     ${current ? `<form id="notifications-form" class="notification-form">
-      <label class="notification-field">Device <select id="push-device" aria-label="Registered device">${connected.map(row=>`<option value="${attr(row.endpoint_hash)}" ${row.endpoint_hash===current.endpoint_hash?'selected':''}>${escapeHTML(row.device_name)}</option>`).join('')}</select></label>
+      <div class="notification-field"><label for="push-device">Device</label><select id="push-device" aria-label="Registered device">${connected.map(row=>`<option value="${attr(row.endpoint_hash)}" ${row.endpoint_hash===current.endpoint_hash?'selected':''}>${escapeHTML(row.device_name)}</option>`).join('')}</select></div>
       <label class="notification-field">Device name <input id="push-device-name" maxlength="48" value="${attr(current.device_name)}" required /></label>
       <div class="notification-toggle-stack">
         <label class="notification-toggle"><input type="checkbox" id="push-enabled" ${current.enabled?'checked':''}/><span><strong>Enable alerts</strong><small>Temporarily mute or resume this device.</small></span></label>
@@ -344,8 +344,8 @@ function notificationsTab() {
         <label class="notification-toggle"><input type="checkbox" id="push-views" ${current.notify_views?'checked':''}/><span><strong>All other page visits</strong><small>Including returning visitors; can generate many alerts.</small></span></label>
       </div>
       <div class="notification-grid">
-        <label class="notification-field">Traffic source <select id="push-source"><option value="all">All sources</option>${options}</select></label>
-        <label class="notification-field">Minimum interval <select id="push-cooldown">${[[0,'Every eligible event'],[60,'1 minute'],[300,'5 minutes'],[900,'15 minutes']].map(([n,label])=>`<option value="${n}" ${Number(current.cooldown_seconds)===n?'selected':''}>${label}</option>`).join('')}</select></label>
+        <div class="notification-field"><label for="push-source">Traffic source</label><select id="push-source"><option value="all">All sources</option>${options}</select></div>
+        <div class="notification-field"><label for="push-cooldown">Minimum interval</label><select id="push-cooldown">${[[0,'Every eligible event'],[60,'1 minute'],[300,'5 minutes'],[900,'15 minutes']].map(([n,label])=>`<option value="${n}" ${Number(current.cooldown_seconds)===n?'selected':''}>${label}</option>`).join('')}</select></div>
       </div>
       <div class="notification-actions"><button type="submit" class="btn btn-primary">Save preferences</button><button type="button" id="test-push" class="btn btn-outline">Send test</button><button type="button" id="remove-push" class="btn btn-danger">Remove device</button></div>
     </form>` : `<div class="notification-empty">${info ? 'No devices subscribed yet. Tap Enable notifications on your Android phone.' : 'Loading notification settings…'}</div>`}
@@ -398,6 +398,8 @@ async function removeDevice(hash) {
 function renderAdmin() {
   document.documentElement.lang=state.adminLang==='uk'?'uk':'en';
   const content = state.tab === 'overview' ? overview() : state.tab === 'links' ? linksTab() : state.tab === 'sources' ? sourceTab() : state.tab === 'appearance' ? appearanceTab() : notificationsTab();
+  notificationDropdownController.abort();
+  notificationDropdownController=new AbortController();
   app.innerHTML = adminShell(content);
   wireAdmin();
   translateAdmin(app, state.adminLang);
@@ -645,6 +647,105 @@ function wireNotifications() {
     try{await removeDevice(selected.endpoint_hash);toast('Device removed');}catch(error){toast(error.message,'error');}
   });
 }
+
+function enhanceNotificationSelects() {
+  const form=qs('#notifications-form');
+  if (!form) return;
+  qsa('select',form).forEach(select=>{
+    const wrapper=document.createElement('div');
+    wrapper.className='notification-select';
+    select.parentNode.insertBefore(wrapper,select);
+    wrapper.append(select);
+    select.classList.add('notification-native-select');
+    select.tabIndex=-1;
+    select.setAttribute('aria-hidden','true');
+
+    const trigger=document.createElement('button');
+    trigger.type='button';
+    trigger.className='notification-select-trigger';
+    trigger.setAttribute('aria-haspopup','listbox');
+    trigger.setAttribute('aria-expanded','false');
+    const label=qs(`label[for="${select.id}"]`);
+    trigger.setAttribute('aria-label',label?.textContent?.trim() || select.getAttribute('aria-label') || 'Select option');
+    const options=document.createElement('div');
+    options.className='notification-select-options';
+    options.id=`${select.id}-options`;
+    options.setAttribute('role','listbox');
+    options.setAttribute('aria-label',trigger.getAttribute('aria-label'));
+    options.hidden=true;
+    trigger.setAttribute('aria-controls',options.id);
+    wrapper.append(trigger,options);
+
+    function draw() {
+      const chosen=select.selectedOptions[0];
+      trigger.innerHTML=`<span class="notification-select-current">${escapeHTML(chosen?.textContent || '')}</span><span class="notification-select-chevron" aria-hidden="true">${chevronSvg}</span>`;
+      options.innerHTML=[...select.options].map((opt,index)=>`<button type="button" role="option" class="notification-select-option${opt.selected?' selected':''}" aria-selected="${opt.selected}" data-option-index="${index}"><span>${escapeHTML(opt.textContent)}</span>${opt.selected?'<span class="notification-select-check" aria-hidden="true">✓</span>':''}</button>`).join('');
+    }
+    function close({restoreFocus=false}={}) {
+      options.hidden=true;
+      wrapper.classList.remove('is-open','opens-up');
+      trigger.setAttribute('aria-expanded','false');
+      if (restoreFocus) trigger.focus();
+    }
+    function open() {
+      // Close any other notification picker before opening this one.
+      form.querySelectorAll('.notification-select.is-open').forEach(other=>{
+        if(other!==wrapper) other.querySelector('.notification-select-trigger')?.click();
+      });
+      draw();
+      const remaining=window.innerHeight-trigger.getBoundingClientRect().bottom;
+      const above=trigger.getBoundingClientRect().top;
+      wrapper.classList.toggle('opens-up',remaining < 220 && above > remaining);
+      options.hidden=false;
+      wrapper.classList.add('is-open');
+      trigger.setAttribute('aria-expanded','true');
+    }
+    function choose(index) {
+      if (!Number.isInteger(index) || index<0 || index>=select.options.length) return;
+      select.selectedIndex=index;
+      select.dispatchEvent(new Event('change',{bubbles:true}));
+      if (!wrapper.isConnected) return; // Device change may re-render admin immediately.
+      draw(); close({restoreFocus:true});
+    }
+    draw();
+    trigger.addEventListener('click',()=>options.hidden?open():close());
+    trigger.addEventListener('keydown',event=>{
+      if(event.key==='Escape') {if(!options.hidden){event.preventDefault();close();}return;}
+      if(['ArrowDown','ArrowUp','Enter',' '].includes(event.key)) {
+        event.preventDefault();
+        if(options.hidden) open();
+        const active=select.selectedIndex;
+        const first=['ArrowUp'].includes(event.key)?Math.max(0,active-1):event.key==='ArrowDown'?Math.min(select.options.length-1,active+1):active;
+        options.querySelector(`[data-option-index="${first}"]`)?.focus();
+      }
+    });
+    options.addEventListener('click',event=>{
+      const item=event.target.closest('[data-option-index]');
+      if(item)choose(Number(item.dataset.optionIndex));
+    });
+    options.addEventListener('keydown',event=>{
+      const focused=event.target.closest('[data-option-index]');
+      if(!focused)return;
+      const index=Number(focused.dataset.optionIndex);
+      if(event.key==='Escape'){event.preventDefault();close({restoreFocus:true});}
+      else if(event.key==='Enter'||event.key===' '){event.preventDefault();choose(index);}
+      else if(event.key==='Home'||event.key==='End'||event.key==='ArrowDown'||event.key==='ArrowUp'){
+        event.preventDefault();
+        const next=event.key==='Home'?0:event.key==='End'?select.options.length-1:Math.min(select.options.length-1,Math.max(0,index+(event.key==='ArrowDown'?1:-1)));
+        options.querySelector(`[data-option-index="${next}"]`)?.focus();
+      }
+    });
+    // A native select remains present so existing data persistence and device changes still work.
+    document.addEventListener('pointerdown',event=>{
+      if(wrapper.isConnected && !wrapper.contains(event.target))close();
+    },{signal:notificationDropdownController.signal});
+    document.addEventListener('keydown',event=>{
+      if(event.key==='Escape' && wrapper.isConnected && !options.hidden)close({restoreFocus:true});
+    },{signal:notificationDropdownController.signal});
+  });
+}
+let notificationDropdownController=new AbortController();
+
 function wireAdmin() {
   const adminToggle=qs('#admin-language-toggle'),adminOptions=qs('#admin-language-options');
   const closeAdminLanguage=()=>{if(!adminOptions)return;adminOptions.hidden=true;adminToggle?.setAttribute('aria-expanded','false');};
@@ -716,14 +817,14 @@ function wireAdmin() {
   });
   qsa('[data-tab]').forEach((el)=>el.onclick=()=>{state.tab=el.dataset.tab;renderAdmin();window.scrollTo(0,0);});
 
-  if(state.tab==='notifications') wireNotifications();
+  if(state.tab==='notifications') { wireNotifications(); enhanceNotificationSelects(); }
   qsa('[data-metric]').forEach((el)=>el.onclick=()=>void metricDetails(el.dataset.metric));
   qsa('[data-period]').forEach((el)=>el.onclick=async()=>{
     state.period=el.dataset.period;
     try{state.overview=await api(`/api/admin/analytics?period=${state.period}`);renderAdmin();}
     catch(error){toast(error.message,'error');}
   });
-  qs('#sign-out')?.addEventListener('click',async()=>{try{await api('/api/admin/logout',{method:'POST'});loginView(true);}catch(error){toast(error.message,'error');}});
+  qsa('[data-sign-out]').forEach(button=>button.addEventListener('click',async()=>{try{await api('/api/admin/logout',{method:'POST'});loginView(true);}catch(error){toast(error.message,'error');}}));
   qsa('[data-copy]').forEach((el)=>el.onclick=async()=>{try{await navigator.clipboard.writeText(el.dataset.copy);toast('Copied to clipboard');}catch{toast('Clipboard unavailable. Select the URL and copy it manually.','error');}});
   qsa('[data-add]').forEach((el)=>el.onclick=()=>openEditor(el.dataset.add));
   qsa('[data-edit]').forEach((el)=>el.onclick=()=>{const type=el.dataset.edit;openEditor(type,(type==='sources'?state.sources:state.buttons).find(x=>x.id===Number(el.dataset.id)));});
