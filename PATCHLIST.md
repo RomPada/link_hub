@@ -1,5 +1,19 @@
 # LinkHub · Release Notes
 
+## v0.3.2 — Appearance layout and grouped destination management
+
+- Removed the duplicate public-page link from the Appearance page header; the existing sidebar link is retained.
+- Expanded Appearance settings to use the full dashboard content width, with responsive form fields.
+- Replaced the browser-native destination-icon mode select with a styled dropdown supporting keyboard navigation, focus, and selected-state indicators.
+- Grouped destination buttons in the admin interface using the same categories and order as the public landing page, including hidden items marked with their status.
+- Scoped the up/down controls to move destinations only within their category while preserving the public ordering.
+- No database migration required.
+
+**Commit:** `fix: refine appearance and group destinations in admin`  
+**Tag:** `v0.3.2`
+
+---
+
 ## v0.3.1 — Language controls, country display and event management
 
 - Replaced font-dependent globe and dropdown characters with consistent SVG icons, with centered chevron rotation.

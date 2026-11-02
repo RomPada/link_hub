@@ -158,12 +158,12 @@ function adminShell(content) {
       <div class="sidebar-spacer"></div>
       <a class="sidebar-visit" href="/" target="_blank" rel="noopener">View public page <span>↗</span></a>
       <button class="sidebar-logout" id="sign-out">Sign out <span>→</span></button>
-      <div class="sidebar-version">LINKHUB · v0.3.1</div>
+      <div class="sidebar-version">LINKHUB · v0.3.2</div>
     </aside>
     <div class="dash-main">
       <header class="dash-topbar"><div class="dash-topbar-title">LINKHUB / <span>${escapeHTML(adminText(tabs.find((tab) => tab[0] === selected)[1],state.adminLang).toUpperCase())}</span></div><div class="dash-topbar-right"><div class="admin-language-menu language-menu"><button type="button" class="language-toggle" id="admin-language-toggle" aria-expanded="false" aria-haspopup="listbox" aria-label="Dashboard language"><span class="language-globe" aria-hidden="true">${globeSvg}</span><span>${state.adminLang==='uk'?'Українська':'English'}</span><span class="language-chevron" aria-hidden="true">${chevronSvg}</span></button><div class="language-options" id="admin-language-options" role="listbox" aria-label="Dashboard language" hidden>${[['en','English'],['uk','Українська']].map(([lang,label])=>`<button type="button" class="language-option${state.adminLang===lang?' selected':''}" role="option" aria-selected="${state.adminLang===lang}" data-admin-language="${lang}"><span>${label}</span>${state.adminLang===lang?'<span aria-hidden="true">✓</span>':''}</button>`).join('')}</div></div><span class="pill-live"><i></i> LIVE</span></div></header>
       <div class="dashboard-content">${content}</div>
-      <footer class="dash-footer">LinkHub v0.3.1 <span>·</span> Cloudflare Workers + D1 <span>·</span> Your data, your links.</footer>
+      <footer class="dash-footer">LinkHub v0.3.2 <span>·</span> Cloudflare Workers + D1 <span>·</span> Your data, your links.</footer>
     </div>
   </div>`;
 }
@@ -236,9 +236,44 @@ async function confirmEventDeletion(id, metric) {
 }
 function copyButton(text, label = 'Copy') { return `<button type="button" class="btn btn-subtle btn-copy" data-copy="${attr(text)}"><span>⧉</span> ${label}</button>`; }
 function linksTab() {
+  // Category order and row order match the public landing page.
+  // Hidden buttons are retained in admin and marked Hidden.
+  const categories = grouped(state.buttons, 'category');
+  const orderedCategoryNames = [
+    ...new Set([...state.buttons.filter(item=>item.active), ...state.buttons].map(item=>item.category || 'Links'))
+  ];
+  const rows = orderedCategoryNames.map(category => {
+    const items = categories[category];
+    return `
+    <section class="manage-category" aria-label="${attr(category)}">
+      <div class="manage-category-heading">
+        <h2>${escapeHTML(category)}</h2>
+        <span class="manage-category-count">${items.length} ${items.length === 1 ? 'link' : 'links'}</span>
+      </div>
+      <div class="manage-grid">${items.map((item, index) => `
+        <article class="manage-card">
+          <div class="manage-card-left">
+            <span class="manage-icon" style="background:${attr(item.accent)}">${iconTile(item)}</span>
+            <div class="manage-card-copy"><div class="manage-title">${escapeHTML(item.title)} <span class="mini-status ${item.active ? 'mini-on':'mini-off'}">${item.active ? 'Live' : 'Hidden'}</span></div>
+              <p>${escapeHTML(item.subtitle || item.url)}</p>
+              <small>${escapeHTML(item.url)}</small>
+            </div>
+          </div>
+          <div class="manage-card-actions">
+            <div class="order-controls">
+              <button type="button" data-move="${item.id}" data-direction="up" ${index===0?'disabled':''} title="Move up" aria-label="Move up">↑</button>
+              <button type="button" data-move="${item.id}" data-direction="down" ${index===items.length-1?'disabled':''} title="Move down" aria-label="Move down">↓</button>
+            </div>
+            ${copyButton(`${location.origin}/out/${item.id}`,'Copy link')}
+            <button class="btn btn-outline" data-edit="buttons" data-id="${item.id}">Edit</button>
+            <button class="btn btn-danger-ghost" data-delete="buttons" data-id="${item.id}">Delete</button>
+          </div>
+        </article>`).join('')}</div>
+    </section>`;
+  }).join('');
   return `<section class="page-heading"><div><div class="eyebrow">YOUR DESTINATIONS</div><h1>My links</h1><p>These are the buttons visitors see on your public page.</p></div><button class="btn btn-primary" data-add="buttons">+ Add a link</button></section>
     <div class="info-strip"><span>◎</span><div><strong>Two separate metrics.</strong> LinkHub tracks visits to your page and clicks on these buttons. Sample links are visible on the public page and lead to safe example.com addresses until replaced.</div></div>
-    <div class="manage-grid">${state.buttons.length ? state.buttons.map((item,index) => `<article class="manage-card"><div class="manage-card-left"><span class="manage-icon" style="background:${attr(item.accent)}">${iconTile(item)}</span><div><div class="manage-title">${escapeHTML(item.title)} <span class="mini-status ${item.active ? 'mini-on':'mini-off'}">${item.active ? 'Live' : 'Hidden'}</span></div><p>${escapeHTML(item.subtitle || item.url)}</p><small>${escapeHTML(item.category)} <span>·</span> ${escapeHTML(item.url)}</small></div></div><div class="manage-card-actions"><div class="order-controls"><button data-move="${item.id}" data-direction="up" ${index===0?'disabled':''} title="Move up">↑</button><button data-move="${item.id}" data-direction="down" ${index===state.buttons.length-1?'disabled':''} title="Move down">↓</button></div>${copyButton(`${location.origin}/out/${item.id}`,'Copy link') }<button class="btn btn-outline" data-edit="buttons" data-id="${item.id}">Edit</button><button class="btn btn-danger-ghost" data-delete="buttons" data-id="${item.id}">Delete</button></div></article>`).join('') : `<div class="public-empty"><h3>Nothing here yet.</h3><p>Add your first destination link.</p></div>`}</div>
+    <div class="manage-categories">${rows || `<div class="public-empty"><h3>Nothing here yet.</h3><p>Add your first destination link.</p></div>`}</div>
     <p class="helper-note">Visitors open a button through a tracked <code>/out/ID</code> URL. You can edit the real destination without changing the button's tracking address.</p>`;
 }
 function sourceTab() {
@@ -249,7 +284,7 @@ function sourceTab() {
 function appearanceTab() {
   const item = state.profile || {};
   const favicon = item.favicon_data ? '<span class="setting-status status-added">Custom favicon saved</span>' : '<span class="setting-status">Using the default icon</span>';
-  return `<section class="page-heading"><div><div class="eyebrow">MAKE IT YOURS</div><h1>Appearance</h1><p>Update the profile and choose which elements appear on your public page.</p></div><a class="btn btn-outline" href="/" target="_blank" rel="noopener">View public page ↗</a></section>
+  return `<section class="page-heading"><div><div class="eyebrow">MAKE IT YOURS</div><h1>Appearance</h1><p>Update the profile and choose which elements appear on your public page.</p></div></section>
     <section class="dash-panel appearance-panel"><div class="panel-title-row"><div><h2>Profile details</h2><p>Changes appear on all entry URLs immediately.</p></div><span class="panel-detail">PUBLIC PROFILE</span></div>
       <form id="profile-form" class="field-form"><div class="form-row"><label>Display name<input name="display_name" maxlength="80" required value="${attr(item.display_name || '')}" placeholder="Your page" /></label><label>Headline<input name="headline" maxlength="140" value="${attr(item.headline || '')}" placeholder="Everything in one place" /></label></div>
       <label>Bio<textarea name="bio" rows="3" maxlength="300" placeholder="Introduce yourself or your project">${escapeHTML(item.bio || '')}</textarea></label>
@@ -302,6 +337,86 @@ async function refreshAdmin({ analytics = true } = {}) {
     renderAdmin();
   } catch(error) {toast(error.message,'error');}
 }
+function iconModePicker(current = 'auto') {
+  const choices = [
+    ['auto','Auto — destination favicon'],
+    ['url','Image URL'],
+    ['upload','Upload image'],
+    ['default','Default arrow']
+  ];
+  const selected = choices.find(([value]) => value === current) || choices[0];
+  return `<div class="icon-mode-picker">
+    <input type="hidden" id="button-icon-mode" name="icon_mode" value="${attr(selected[0])}" />
+    <button type="button" class="icon-mode-trigger" id="icon-mode-trigger" aria-label="Icon mode" aria-expanded="false" aria-haspopup="listbox" aria-controls="icon-mode-options">
+      <span class="icon-mode-label" id="icon-mode-label">${escapeHTML(selected[1])}</span>
+      <span class="icon-mode-chevron" aria-hidden="true">${chevronSvg}</span>
+    </button>
+    <div class="icon-mode-options" id="icon-mode-options" role="listbox" aria-label="Icon mode" hidden>
+      ${choices.map(([value,label])=>`<button type="button" role="option" aria-selected="${value===selected[0]}" class="icon-mode-option${value===selected[0]?' selected':''}" data-icon-mode-option="${value}"><span>${escapeHTML(label)}</span><span class="icon-mode-check" aria-hidden="true">✓</span></button>`).join('')}
+    </div>
+  </div>`;
+}
+function wireIconModePicker(onSelect) {
+  const picker=qs('.icon-mode-picker');
+  if(!picker)return;
+  const trigger=qs('.icon-mode-trigger',picker);
+  const menu=qs('.icon-mode-options',picker);
+  const field=qs('#button-icon-mode',picker);
+  const options=qsa('[data-icon-mode-option]',picker);
+  const expanded=(value)=>{
+    menu.hidden=!value;
+    trigger.setAttribute('aria-expanded',String(value));
+    if(value){
+      const rect=trigger.getBoundingClientRect();
+      const dialog=picker.closest('.modal-card');
+      const bounds=dialog?.getBoundingClientRect();
+      const bottomLimit=Math.min(window.innerHeight-12,bounds?.bottom ?? window.innerHeight);
+      const topLimit=Math.max(12,bounds?.top ?? 0);
+      const menuHeight=Math.min(menu.scrollHeight,270,window.innerHeight*0.45);
+      const freeBelow=bottomLimit-rect.bottom-8;
+      const freeAbove=rect.top-topLimit-8;
+      picker.classList.toggle('open-up',freeBelow<menuHeight && freeAbove>freeBelow);
+      options.find(option=>option.dataset.iconModeOption===field.value)?.focus();
+    } else picker.classList.remove('open-up');
+  };
+  const choose=(option)=>{
+    field.value=option.dataset.iconModeOption;
+    qs('#icon-mode-label',picker).textContent=option.querySelector('span').textContent;
+    options.forEach(el=>{
+      const selected=el===option;
+      el.classList.toggle('selected',selected);
+      el.setAttribute('aria-selected',String(selected));
+    });
+    expanded(false);
+    trigger.focus();
+    onSelect();
+  };
+  trigger.addEventListener('click',()=>expanded(menu.hidden));
+  trigger.addEventListener('keydown',event=>{
+    if(event.key==='ArrowDown'||event.key==='ArrowUp') {
+      event.preventDefault();expanded(true);
+      (event.key==='ArrowUp'?options[options.length-1]:options[0])?.focus();
+    }
+  });
+  options.forEach((option,index)=>{
+    option.addEventListener('click',()=>choose(option));
+    option.addEventListener('keydown',event=>{
+      if(event.key==='ArrowDown'||event.key==='ArrowUp'||event.key==='Home'||event.key==='End'){
+        event.preventDefault();
+        const next=event.key==='Home'?0:event.key==='End'?options.length-1:(index+(event.key==='ArrowDown'?1:-1)+options.length)%options.length;
+        options[next]?.focus();
+      } else if(event.key==='Escape') {
+        event.preventDefault();event.stopPropagation();expanded(false);trigger.focus();
+      } else if(event.key==='Tab')expanded(false);
+    });
+  });
+  picker.closest('.modal-card')?.addEventListener('pointerdown',event=>{
+    if(!picker.contains(event.target))expanded(false);
+  });
+  picker.addEventListener('focusout',()=>{
+    setTimeout(()=>{if(!picker.contains(document.activeElement))expanded(false);},0);
+  });
+}
 function openEditor(type, existing = null) {
   const isSource=type==='sources', editing=Boolean(existing);
   let fields;
@@ -314,9 +429,7 @@ function openEditor(type, existing = null) {
     <label>Section / category<input name="category" value="${attr(existing?.category || 'Resources')}" placeholder="Resources" maxlength="50"/></label>
     <div class="form-color-field"><span>Card color</span><div class="color-choices">${palette.map(([color, title])=> `<label title="${title}" class="color-choice"><input type="radio" name="accent" value="${color}" ${(!existing?.accent ? color===palette[0][0] : existing.accent===color) ? 'checked':''}/><span style="background:${color}"></span></label>`).join('')}</div></div>
     <section class="button-icon-settings"><h3>Button icon</h3><p>Automatic favicon from the destination, image URL, your own file, or the default arrow.</p>
-      <label>Icon mode<select name="icon_mode" id="button-icon-mode">
-        ${[['auto','Auto — destination favicon'],['url','Image URL'],['upload','Upload image'],['default','Default arrow']].map(([value,label])=>`<option value="${value}" ${value===(existing?.icon_mode||'auto')?'selected':''}>${label}</option>`).join('')}
-      </select></label>
+      <div class="icon-mode-field"><span class="icon-mode-field-label">Icon mode</span>${iconModePicker(existing?.icon_mode||'auto')}</div>
       <label class="icon-url-field">Image URL<input name="icon_url" type="url" placeholder="https://example.com/favicon.png" value="${attr(existing?.icon_url||'')}" /></label>
       <div class="icon-upload-field"><span class="file-field-title">Upload PNG, WebP or ICO (60 KB max)</span><label class="file-picker" for="button-icon-upload"><span class="file-picker-icon" aria-hidden="true">↑</span><span class="file-picker-action">Choose file</span><span class="file-picker-name" id="button-file-label">No file selected</span></label><input class="visually-hidden-input" id="button-icon-upload" type="file" accept=".png,.webp,.ico,image/png,image/webp,image/x-icon,image/vnd.microsoft.icon" /></div>
       <div class="button-icon-hint" id="button-icon-hint"></div>
@@ -333,7 +446,7 @@ function openEditor(type, existing = null) {
     qs('#button-icon-hint').textContent=help[modeField.value]||'';
   };
   qs('#button-icon-upload')?.addEventListener('change',event=>{const label=qs('#button-file-label');if(label)label.textContent=event.target.files?.[0]?.name||'No file selected';});
-  modeField?.addEventListener('change',refreshIconSettings);
+  wireIconModePicker(refreshIconSettings);
   refreshIconSettings();
   qs('#edit-item-form').onsubmit=async(event)=>{
     event.preventDefault();
@@ -424,8 +537,17 @@ function wireAdmin() {
   qsa('[data-edit]').forEach((el)=>el.onclick=()=>{const type=el.dataset.edit;openEditor(type,(type==='sources'?state.sources:state.buttons).find(x=>x.id===Number(el.dataset.id)));});
   qsa('[data-delete]').forEach((el)=>el.onclick=()=>askDelete(el.dataset.delete,Number(el.dataset.id)));
   qsa('[data-move]').forEach((el)=>el.onclick=async()=>{
-    const ids=state.buttons.map((x)=>x.id),current=ids.indexOf(Number(el.dataset.move));const target=current+(el.dataset.direction==='up'?-1:1);
-    if(target<0||target>=ids.length)return;
+    const button=state.buttons.find(item=>item.id===Number(el.dataset.move));
+    if(!button)return;
+    const category=button.category || 'Links';
+    const siblings=state.buttons.filter(item=>(item.category||'Links')===category);
+    const siblingIndex=siblings.findIndex(item=>item.id===button.id);
+    const nextSibling=siblings[siblingIndex+(el.dataset.direction==='up'?-1:1)];
+    if(!nextSibling)return;
+    // Swap only this category's adjacent members in the global sort order.
+    // Public and admin category lists therefore retain the same ordering.
+    const ids=state.buttons.map(item=>item.id);
+    const current=ids.indexOf(button.id),target=ids.indexOf(nextSibling.id);
     [ids[current],ids[target]]=[ids[target],ids[current]];
     try{await api('/api/admin/buttons/order',{method:'PATCH',data:{ids}});await refreshAdmin({analytics:false});toast('Button order saved');}catch(error){toast(error.message,'error');}
   });

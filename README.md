@@ -2,7 +2,7 @@
 
 A self-hosted, single-profile link landing page with independent analytics for incoming visits and outbound destination clicks. Built on **Cloudflare Workers**, **Cloudflare D1**, and lightweight browser-native HTML/CSS/JavaScript.
 
-**Version:** 0.3.1 · **Runtime:** Cloudflare Workers · **Database:** D1 (SQLite) · **Default public language:** English
+**Version:** 0.3.2 · **Runtime:** Cloudflare Workers · **Database:** D1 (SQLite) · **Default public language:** English
 
 ## Overview
 
@@ -25,7 +25,7 @@ Source attribution reflects the entry URL used, not a verified upstream website.
 
 - Responsive personal profile: display name, headline, bio, and avatar image or customizable monogram tile.
 - Grouped destination buttons with editable descriptions, colors, order, and visibility.
-- Destination icons: automatic `/favicon.ico` from the destination origin, custom image URL, upload (PNG/WebP/ICO, up to 60 KiB), or the default arrow. A missing auto icon falls back to the arrow.
+- Destination icons with a styled, keyboard-operable mode selector: automatic `/favicon.ico` from the destination origin, custom image URL, upload (PNG/WebP/ICO, up to 60 KiB), or the default arrow. A missing auto icon falls back to the arrow.
 - Editable browser favicon (PNG/WebP/ICO), stored in D1.
 - Live accent color applied to highlights, link arrows, and interactive states.
 - SVG-based language selector with a centered globe/chevron for English (default), Japanese, German, Spanish, and French. Interface copy is localized; user-authored names and descriptions are not translated automatically.
@@ -33,7 +33,7 @@ Source attribution reflects the entry URL used, not a verified upstream website.
 **Administration and analytics**
 
 - Password-based admin login and revocable sessions; same-origin checks for data-changing requests and login rate limiting.
-- Create, edit, pause, and delete entry sources and destination buttons; reorder buttons.
+- Create, edit, pause, and delete entry sources and destination buttons. Destinations are grouped by their category in the admin interface just as they are on the public page; the up/down controls reorder links within the current category.
 - Analytics periods: Today, 7 days, This month, All time (UTC boundaries).
 - Interactive dashboard cards for Page views, Unique visitors and Outbound clicks: open detailed event logs for the selected period (up to 250 records). CTR is a read-only calculated metric with no detail dialog.
 - Individual event deletion with confirmation (permanent, authenticated, reflected immediately in analytics).
@@ -41,11 +41,16 @@ Source attribution reflects the entry URL used, not a verified upstream website.
 - Source, destination, and country rankings, a 14-day chart (today first), and recent events.
 - English / Ukrainian admin interface; default English.
 
+**Appearance and layout**
+
+- The Appearance form uses the available dashboard content width on desktop and adapts to smaller screens.
+- The public-page shortcut remains available in the sidebar, without a duplicate action inside Appearance.
+
 **Operational design**
 
 - No runtime dependency on third-party analytics products.
 - No React/Next.js build step; assets are deployed with one Worker.
-- D1 migration files are additive and applied using Wrangler. v0.3.1 does not require a new migration.
+- D1 migration files are additive and applied using Wrangler. v0.3.2 does not require a new migration.
 - Runs on Cloudflare Free plans within the platform's request and database limits. A `*.workers.dev` deployment doesn't require a purchased domain.
 
 ## Requirements
