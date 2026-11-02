@@ -1,4 +1,4 @@
-/** LinkHub v0.3.1 — one Cloudflare Worker + D1 + static assets.
+/** LinkHub v0.4.0 — one Cloudflare Worker + D1 + static assets.
  * Analytics counts page visits and outbound button clicks separately.
  * No raw IP addresses or HTTP referrers are stored.
  */
@@ -8,7 +8,7 @@ const VISITOR_COOKIE = 'lh_visitor';
 const SOURCE_COOKIE = 'lh_source';
 const WEEK_MS = 7 * 86400000;
 const SESSION_TTL = WEEK_MS;
-const RESERVED = new Set(['admin', 'api', 'out', 'button-icon', 'login', 'demo', 'go', 'favicon', 'manifest', 'icon', 'robots', 'index', 'assets', 'site-icon']);
+const RESERVED = new Set(['admin', 'admn', 'api', 'out', 'button-icon', 'login', 'demo', 'go', 'favicon', 'manifest', 'icon', 'robots', 'index', 'assets', 'site-icon']);
 const NAV_BOTS = /bot|crawl|spider|slurp|preview|facebookexternalhit|twitterbot|telegrambot|discordbot|whatsapp|linkedinbot|pinterest|headless|lighthouse|google-inspectiontool/i;
 const VALID_SLUG = /^[a-z][a-z0-9_-]{0,39}$/;
 const COLOR_CHOICES = new Set(['#e9eefc','#f9e8e7','#f9edd7','#e4f0e9','#ede8f9','#e8f3f5','#f2ece6','#f5e9f1']);
@@ -95,6 +95,23 @@ function safeFavicon(value) {
   if (!(png || ico || webp)) throw new Error('Invalid favicon file signature');
   return value;
 }
+
+function safeProfileImage(value, label = 'Profile image') {
+  if (value === '') return '';
+  if (typeof value !== 'string' || value.length > 360000) throw new Error(`${label} is too large (max 256 KB)`);
+  const match = /^data:image\/(png|webp|jpeg);base64,([a-zA-Z0-9+/]+={0,2})$/.exec(value);
+  if (!match) throw new Error(`${label}: upload a PNG, WebP or JPEG image`);
+  let bytes;
+  try { bytes = atob(match[2]); } catch { throw new Error(`Invalid ${label.toLowerCase()} image`); }
+  if (!bytes.length || bytes.length > 262144) throw new Error(`${label} is too large (max 256 KB)`);
+  const start = [...bytes.slice(0, 12)].map(character => character.charCodeAt(0));
+  const png = start.slice(0,8).join(',') === '137,80,78,71,13,10,26,10';
+  const webp = bytes.startsWith('RIFF') && bytes.slice(8,12) === 'WEBP';
+  const jpeg = start[0] === 255 && start[1] === 216 && start[2] === 255;
+  if ((match[1] === 'png' && !png) || (match[1] === 'webp' && !webp) || (match[1] === 'jpeg' && !jpeg)) throw new Error(`Invalid ${label.toLowerCase()} file signature`);
+  return value;
+}
+
 async function buttonIcon(request, env, identifier) {
   if (!/^\d+$/.test(identifier)) return fail('Icon not found', 404);
   const button = await env.DB.prepare('SELECT icon_mode,icon_data FROM buttons WHERE id = ? AND active=1')
@@ -218,8 +235,8 @@ async function goOutbound(request, env, ctx, identifier) {
 }
 async function publicData(env) {
   const [profile, links] = await Promise.all([
-    env.DB.prepare('SELECT display_name,headline,bio,avatar_url,accent_color,avatar_text,avatar_background,avatar_shape,show_top_brand,show_top_tagline,updated_at FROM settings WHERE id=1').first(),
-    env.DB.prepare('SELECT id,title,subtitle,category,accent,url,icon_mode,icon_url FROM buttons WHERE active=1 ORDER BY sort_order ASC,id ASC').all()
+    env.DB.prepare('SELECT display_name,headline,bio,avatar_url,avatar_data,cover_image_url,cover_image_data,accent_color,avatar_text,avatar_background,avatar_shape,updated_at FROM settings WHERE id=1').first(),
+    env.DB.prepare('SELECT id,title,subtitle,accent,url,icon_mode,icon_url FROM buttons WHERE active=1 ORDER BY sort_order ASC,id ASC').all()
   ]);
   return json({ profile, links: links.results });
 }
@@ -232,12 +249,13 @@ function verifyAdminPayload(path, method, data) {
     const avatar_text = text(data.avatar_text, 8);
     const avatar_background = /^#[a-fA-F0-9]{6}$/.test(data.avatar_background) ? data.avatar_background : '#142849';
     const avatar_shape = ['rounded','square','circle'].includes(data.avatar_shape) ? data.avatar_shape : 'rounded';
-    const show_top_brand = bool(data.show_top_brand);
-    const show_top_tagline = bool(data.show_top_tagline);
+    const cover_image_url = text(data.cover_image_url, 1000);
+    const cover_image_data = safeProfileImage(data.cover_image_data ?? '', 'Cover image');
+    const avatar_data = safeProfileImage(data.avatar_data ?? '', 'Avatar');
     const favicon_data = safeFavicon(data.favicon_data ?? '');
     const accent_color = /^#[a-fA-F0-9]{6}$/.test(data.accent_color) ? data.accent_color : '#4267e9';
-    if (!display_name || (avatar_url && !validHttpUrl(avatar_url))) throw new Error('Please enter a valid name and avatar URL');
-    return { display_name, headline, bio, avatar_url, accent_color, avatar_text, avatar_background, avatar_shape, show_top_brand, show_top_tagline, favicon_data };
+    if (!display_name || (avatar_url && !validHttpUrl(avatar_url)) || (cover_image_url && !validHttpUrl(cover_image_url))) throw new Error('Please enter a valid name and image URLs');
+    return { display_name, headline, bio, avatar_url, avatar_data, cover_image_url, cover_image_data, accent_color, avatar_text, avatar_background, avatar_shape, favicon_data };
   }
   if (path === 'sources') {
     const name = text(data.name, 60);
@@ -249,7 +267,7 @@ function verifyAdminPayload(path, method, data) {
     const title = text(data.title, 70);
     const subtitle = text(data.subtitle, 120);
     const url = text(data.url, 1800);
-    const category = text(data.category, 50) || 'Links';
+    const category = 'Links'; // Legacy D1 field retained for backward compatibility.
     const accent = safeColor(data.accent);
     const active = bool(data.active);
     const icon_mode = ['auto','url','upload','default'].includes(data.icon_mode) ? data.icon_mode : 'auto';
@@ -337,9 +355,9 @@ async function adminApi(request, env, path, method) {
     return json({ ok: true, deleted: Number(rawId) });
   }
   if (path === 'profile' && method === 'PUT') {
-    const data = verifyAdminPayload(path, method, await bodyJson(request, 128000));
-    await env.DB.prepare(`UPDATE settings SET display_name=?,headline=?,bio=?,avatar_url=?,accent_color=?,avatar_text=?,avatar_background=?,avatar_shape=?,show_top_brand=?,show_top_tagline=?,favicon_data=?,updated_at=? WHERE id=1`)
-      .bind(data.display_name,data.headline,data.bio,data.avatar_url,data.accent_color,data.avatar_text,data.avatar_background,data.avatar_shape,data.show_top_brand,data.show_top_tagline,data.favicon_data,Date.now()).run();
+    const data = verifyAdminPayload(path, method, await bodyJson(request, 850000));
+    await env.DB.prepare(`UPDATE settings SET display_name=?,headline=?,bio=?,avatar_url=?,avatar_data=?,cover_image_url=?,cover_image_data=?,accent_color=?,avatar_text=?,avatar_background=?,avatar_shape=?,favicon_data=?,updated_at=? WHERE id=1`)
+      .bind(data.display_name,data.headline,data.bio,data.avatar_url,data.avatar_data,data.cover_image_url,data.cover_image_data,data.accent_color,data.avatar_text,data.avatar_background,data.avatar_shape,data.favicon_data,Date.now()).run();
     return json({ ok: true });
   }
   const parts = path.split('/');
@@ -410,7 +428,7 @@ export default {
       if (pathname.startsWith('/api/')) return fail('Endpoint not found',404);
       if (method !== 'GET' && method !== 'HEAD') return new Response('Method not allowed', { status: 405 });
       if (pathname.startsWith('/out/')) return await goOutbound(request,env,ctx,pathname.slice('/out/'.length));
-      if (pathname === '/admin' || pathname === '/admin/') return await landing(request,env,ctx,null,false);
+      if (pathname === '/admn' || pathname === '/admn/') return await landing(request,env,ctx,null,false);
       if (pathname === '/' || pathname === '' || pathname === '/index.html') return await landing(request,env,ctx,null);
       if (/^\/[a-z][a-z0-9_-]{0,39}\/?$/.test(pathname)) {
         const slug = pathname.replace(/^\/+|\/+$/g,'');
@@ -421,7 +439,7 @@ export default {
       return await env.ASSETS.fetch(request);
     } catch (error) {
       console.error('LinkHub handler error:',error);
-      if (error?.message === 'Invalid JSON' || error?.message === 'Request is too large' || error?.message?.startsWith('Please enter') || error?.message?.startsWith('Use a name') || error?.message?.startsWith('Favicon') || error?.message?.startsWith('Invalid favicon') || error?.message?.startsWith('Use a PNG') || error?.message?.startsWith('Please enter a valid icon') || error?.message?.startsWith('Upload an icon')) return fail(error.message,400);
+      if (error?.message === 'Invalid JSON' || error?.message === 'Request is too large' || error?.message?.startsWith('Please enter') || error?.message?.startsWith('Use a name') || error?.message?.startsWith('Favicon') || error?.message?.startsWith('Invalid favicon') || error?.message?.startsWith('Use a PNG') || error?.message?.startsWith('Please enter a valid icon') || error?.message?.startsWith('Upload an icon') || error?.message?.startsWith('Avatar') || error?.message?.startsWith('Cover image') || error?.message?.startsWith('Invalid avatar') || error?.message?.startsWith('Invalid cover image')) return fail(error.message,400);
       if (/UNIQUE constraint failed/i.test(error?.message || '')) return fail('This URL slug is already in use',409);
       return fail('Server error. Check Worker logs and D1 migrations.',500);
     }

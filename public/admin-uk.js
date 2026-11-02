@@ -95,6 +95,25 @@ Object.assign(lexicon, {
   'Used for highlights, link arrows, focus indicators and interactive details.':'Використовується для акцентів, стрілок, виділення фокусу й інтерактивних елементів.',
   'Unexpected error':'Неочікувана помилка'
 });
+Object.assign(lexicon, {
+ 'Manage all destination buttons in one ordered list.':'Керуй усіма кнопками в одному впорядкованому списку.',
+ 'LinkHub records page visits and tracked destination clicks independently.':'LinkHub окремо фіксує відвідування сторінки та кліки на зовнішні ресурси.',
+ 'Profile header':'Шапка профілю',
+ 'Customize the cover artwork, avatar and identity — just like a social profile.':'Налаштовуй обкладинку, аватар і дані профілю — як у соціальній мережі.',
+ 'Public profile preview':'Попередній перегляд профілю',
+ 'Cover image URL':'URL зображення обкладинки',
+ 'Or upload a cover (PNG, JPG, WebP · up to 256 KB)':'Або завантаж обкладинку (PNG, JPG, WebP · до 256 КБ)',
+ 'Choose cover':'Обрати обкладинку',
+ 'Remove cover':'Прибрати обкладинку',
+ 'Or upload an avatar (PNG, JPG, WebP · up to 256 KB)':'Або завантаж аватар (PNG, JPG, WebP · до 256 КБ)',
+ 'Choose avatar':'Обрати аватар',
+ 'Remove avatar image':'Прибрати зображення аватара',
+ 'Fallback avatar letters':'Резервні літери аватара',
+ 'Fallback avatar background':'Резервний фон аватара',
+ 'Profile image must not exceed 256 KB':'Зображення профілю не може перевищувати 256 КБ',
+ 'Use a PNG, JPG or WebP image':'Завантаж PNG, JPG або WebP',
+ 'Profile header':'Шапка профілю',
+});
 const attributes=['placeholder','title','aria-label'];
 function translateValue(original) {
   if (lexicon[original]) return lexicon[original];

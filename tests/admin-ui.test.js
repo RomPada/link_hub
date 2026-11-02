@@ -13,23 +13,21 @@ function loadFunction(name, next, injected) {
 const escapeHTML = (value) => String(value || '').replace(/[&<>"']/g, (char) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const grouped = (items,key) => items.reduce((all,item)=>{(all[item[key] || 'Links'] ||= []).push(item);return all;},Object.create(null));
 
-test('My links uses the public categories, maintains each category order, includes hidden links',()=>{
+test('My links shows a single ordered list including hidden links and actions',()=>{
   const state={buttons:[
     {id:1,category:'Resources',title:'Resource A',url:'https://example.com/a',accent:'#e9eefc',active:1},
     {id:2,category:'Channels',title:'Channel A',url:'https://example.com/b',accent:'#e9eefc',active:1},
-    {id:3,category:'Resources',title:'Resource B',url:'https://example.com/c',accent:'#e9eefc',active:1},
-    {id:4,category:'Channels',title:'Channel B',url:'https://example.com/d',accent:'#e9eefc',active:0}
+    {id:3,category:'Resources',title:'Resource B',url:'https://example.com/c',accent:'#e9eefc',active:0}
   ]};
-  const func=loadFunction('linksTab','sourceTab',{state,grouped,escapeHTML,attr:escapeHTML,iconTile:()=>'<span class="public-link-icon">↗</span>',copyButton:()=>'<button data-copy="/out/1">Copy link</button>',location:{origin:'https://linkhub.example'}});
+  const func=loadFunction('linksTab','sourceTab',{state,escapeHTML,attr:escapeHTML,iconTile:()=>'<span class="public-link-icon">↗</span>',copyButton:()=>'<button data-copy="/out/1">Copy link</button>',location:{origin:'https://linkhub.example'}});
   const markup=func();
-  assert.match(markup,/class="manage-categories"/);
-  const section1=markup.split('class="manage-category"')[1];
-  const section2=markup.split('class="manage-category"')[2];
-  assert.ok(section1.indexOf('Resource A')<section1.indexOf('Resource B'));
-  assert.ok(section2.indexOf('Channel A')<section2.indexOf('Channel B'));
-  assert.match(section2,/Hidden/);
-  assert.match(section1,/data-move="1" data-direction="up" disabled/);
-  assert.match(section1,/data-move="3" data-direction="down" disabled/);
+  assert.match(markup,/class="manage-grid ungrouped-links"/);
+  assert.ok(markup.indexOf('Resource A')<markup.indexOf('Channel A'));
+  assert.ok(markup.indexOf('Channel A')<markup.indexOf('Resource B'));
+  assert.doesNotMatch(markup,/class="manage-category"/);
+  assert.match(markup,/Hidden/);
+  assert.match(markup,/data-move="1" data-direction="up" disabled/);
+  assert.match(markup,/data-move="3" data-direction="down" disabled/);
   assert.match(markup,/data-edit="buttons"/);
   assert.match(markup,/data-delete="buttons"/);
   assert.match(markup,/data-copy=/);

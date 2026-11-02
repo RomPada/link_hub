@@ -10,6 +10,7 @@ function makeD1() {
   sqlite.exec(readFileSync(new URL('../migrations/0001_init.sql', import.meta.url), 'utf8'));
   sqlite.exec(readFileSync(new URL('../migrations/0002_public_identity.sql', import.meta.url), 'utf8'));
   sqlite.exec(readFileSync(new URL('../migrations/0003_button_icons.sql', import.meta.url), 'utf8'));
+  sqlite.exec(readFileSync(new URL('../migrations/0004_profile_header.sql', import.meta.url), 'utf8'));
   function bindStatement(query, params) {
     const statement = sqlite.prepare(query);
     const values = params.map((value) => value === undefined ? null : value);
@@ -105,29 +106,31 @@ test('public API exposes neutral, active example links and identity controls',as
   assert.equal(data.links.length,4);
   assert.equal(data.links[0].title,'Example Resource One');
   assert.equal(data.profile.avatar_shape,'rounded');
-  assert.equal(data.profile.show_top_brand,1);
-  assert.equal(data.profile.show_top_tagline,1);
+  assert.equal(data.profile.cover_image_url,'');
+  assert.equal(data.profile.avatar_data,'');
 });
 
-test('admin can configure avatar, top bar and upload a favicon that is served publicly',async()=>{
+test('admin can configure avatar, cover and favicon that is served publicly',async()=>{
   const {sqlite,env,ctx,req}=setup();
   const login=await worker.fetch(req('/api/admin/login',{method:'POST',body:{password:env.ADMIN_PASSWORD}}),env,ctx());
   const session=login.headers.get('set-cookie').split(';')[0];
   const favicon='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4////fwAJ+wP+lXcf7wAAAABJRU5ErkJggg==';
   const response=await worker.fetch(req('/api/admin/profile',{method:'PUT',cookie:session,body:{
     display_name:'Sample Project',headline:'Hello',bio:'Custom text',avatar_url:'',avatar_text:'SP',avatar_background:'#224466',avatar_shape:'circle',
-    accent_color:'#4267e9',show_top_brand:false,show_top_tagline:false,favicon_data:favicon
+    accent_color:'#4267e9',cover_image_url:'https://example.com/cover.jpg',cover_image_data:'',avatar_data:favicon,favicon_data:favicon
   }}),env,ctx());
   assert.equal(response.status,200,await response.text());
   const saved=sqlite.prepare('SELECT * FROM settings WHERE id=1').get();
   assert.equal(saved.avatar_text,'SP');
   assert.equal(saved.avatar_background,'#224466');
   assert.equal(saved.avatar_shape,'circle');
-  assert.equal(saved.show_top_brand,0);
-  assert.equal(saved.show_top_tagline,0);
+  assert.equal(saved.cover_image_url,'https://example.com/cover.jpg');
+  assert.equal(saved.avatar_data,favicon);
   assert.equal(saved.favicon_data,favicon);
   const publicState=await (await worker.fetch(req('/api/public'),env,ctx())).json();
   assert.equal(publicState.profile.avatar_text,'SP');
+  assert.equal(publicState.profile.avatar_data,favicon);
+  assert.equal(publicState.profile.cover_image_url,'https://example.com/cover.jpg');
   assert.equal('favicon_data' in publicState.profile,false);
   const icon=await worker.fetch(req('/site-icon'),env,ctx());
   assert.equal(icon.status,200);
@@ -140,7 +143,7 @@ test('admin can configure avatar, top bar and upload a favicon that is served pu
   assert.equal(rejected.status,400);
 });
 
-test('a v0.1.0 database upgrades untouched samples but retains custom destinations and history',async()=>{
+test('database migrations preserve existing destinations and history while removing categories',async()=>{
   const {sqlite}=setup();
   // A retained v0.1.0 entry changed by an administrator must never be overwritten by the upgrade.
   sqlite.prepare('UPDATE buttons SET url=? WHERE id=1').run('https://example.net/custom');
@@ -149,6 +152,8 @@ test('a v0.1.0 database upgrades untouched samples but retains custom destinatio
   assert.equal(sqlite.prepare('SELECT url FROM buttons WHERE id=1').get().url,'https://example.net/custom');
   assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM events').get().n,1);
   assert.ok(sqlite.prepare('PRAGMA table_info(settings)').all().some((row)=>row.name==='favicon_data'));
+  assert.ok(sqlite.prepare('PRAGMA table_info(settings)').all().some((row)=>row.name==='cover_image_data'));
+  assert.ok(sqlite.prepare('SELECT count(*) n FROM buttons WHERE category=\'Links\'').get().n >= 4);
 });
 
 test('link icon modes can be configured and uploaded icon is served only for public active links', async () => {
@@ -235,4 +240,21 @@ test('country metadata uses Cloudflare production country and local visits are u
   const local=new Request('http://localhost:8787/source-one',{headers:{'User-Agent':'Mozilla/5.0','CF-IPCountry':'NL'}});
   const localCtx=ctx();await worker.fetch(local,env,localCtx);await localCtx.settled();
   assert.equal(sqlite.prepare('SELECT country FROM events ORDER BY id DESC LIMIT 1').get().country,null);
+});
+
+test('profile API saves cover and avatar uploads and rejects unsupported images',async()=>{
+ const {sqlite,env,ctx,req}=setup();
+ const login=await worker.fetch(req('/api/admin/login',{method:'POST',body:{password:env.ADMIN_PASSWORD}}),env,ctx());
+ const session=login.headers.get('set-cookie').split(';')[0];
+ const png='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4////fwAJ+wP+lXcf7wAAAABJRU5ErkJggg==';
+ const data={display_name:'Sample',headline:'Test',bio:'',avatar_url:'',avatar_data:png,
+ cover_image_url:'',cover_image_data:png,avatar_text:'S',avatar_background:'#142849',avatar_shape:'rounded',accent_color:'#4267e9',favicon_data:''};
+ const success=await worker.fetch(req('/api/admin/profile',{method:'PUT',cookie:session,body:data}),env,ctx());
+ assert.equal(success.status,200,await success.text());
+ const profile=(await (await worker.fetch(req('/api/public'),env,ctx())).json()).profile;
+ assert.equal(profile.avatar_data,png);
+ assert.equal(profile.cover_image_data,png);
+ assert.equal(sqlite.prepare('SELECT cover_image_data FROM settings WHERE id=1').get().cover_image_data,png);
+ const bad=await worker.fetch(req('/api/admin/profile',{method:'PUT',cookie:session,body:{...data,cover_image_data:'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4='}}),env,ctx());
+ assert.equal(bad.status,400);
 });

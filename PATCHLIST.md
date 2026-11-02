@@ -1,5 +1,22 @@
 # LinkHub · Release Notes
 
+## v0.4.0 — Social profile header and unified destination list
+
+- Changed the private login URL to `/admn`; the previous `/admin` URL now returns 404 and is not tracked.
+- Kept the login page in English, independent of the dashboard language setting.
+- Centered the login logo, introduction and primary button label.
+- Removed destination categories from both the public landing page and My links; all links now follow one consistent order.
+- Added sequential row numbers to recent activity and detailed event logs.
+- Rebuilt the public profile as a social-style card with cover artwork, overlapping avatar and identity information.
+- Added cover image URL/upload and avatar image upload, plus a live profile preview and removal controls.
+- Added D1 migration `0004_profile_header.sql`; existing links, sources, and analytics events are preserved.
+- Updated documentation, responsive styles, and automated tests.
+
+**Commit:** `feat: redesign profile header and unify destination links`  
+**Tag:** `v0.4.0`
+
+---
+
 ## v0.3.2 — Appearance layout and grouped destination management
 
 - Removed the duplicate public-page link from the Appearance page header; the existing sidebar link is retained.

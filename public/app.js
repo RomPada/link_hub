@@ -2,7 +2,7 @@ import { publicLocales, publicLanguages, storedPublicLanguage } from './locales.
 import { getAdminLanguage, translateAdmin, adminText } from './admin-uk.js';
 /** LinkHub browser client — plain JavaScript, no framework or build step. */
 const app = document.getElementById('app');
-const adminMode = location.pathname.replace(/\/$/, '') === '/admin';
+const adminMode = location.pathname.replace(/\/$/, '') === '/admn';
 const state = { adminLang: getAdminLanguage(), publicLang: storedPublicLanguage(), tab: 'overview', period: 'week', overview: null, profile: null, sources: [], buttons: [], busy: false, modal: null };
 
 const palette = [
@@ -20,7 +20,7 @@ function relativeDate(day) { return new Intl.DateTimeFormat('en-US', { month: 's
 function toast(message, type = 'ok') {
   let panel = qs('.toast-stack');
   if (!panel) { panel = document.createElement('div'); panel.className = 'toast-stack'; document.body.append(panel); }
-  const item = document.createElement('div'); item.className = `toast toast-${type}`; item.textContent = adminMode ? adminText(message, state.adminLang) : message;
+  const item = document.createElement('div'); item.className = `toast toast-${type}`; item.textContent = adminMode && !qs('.login-shell') ? adminText(message, state.adminLang) : message;
   panel.append(item); window.setTimeout(() => item.remove(), 3700);
 }
 async function api(path, { method = 'GET', data } = {}) {
@@ -53,6 +53,14 @@ async function readIconFile(file) {
     reader.readAsDataURL(file);
   });
 }
+async function readProfileFile(file) {
+  if(file.size > 262144)throw new Error('Profile image must not exceed 256 KB');
+  if(!['image/png','image/jpeg','image/webp'].includes(file.type))throw new Error('Use a PNG, JPG or WebP image');
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();reader.onload=()=>resolve(String(reader.result));
+    reader.onerror=()=>reject(new Error('Unable to read image'));reader.readAsDataURL(file);
+  });
+}
 function iconSrc(button) {
   try {
     if (button.icon_mode === 'default') return '';
@@ -72,18 +80,12 @@ function publicLanguageMenu(lang, t) {
   <div class="language-options" id="language-options" role="listbox" aria-label="${attr(t.language)}" hidden>${publicLanguages.map(([code,label])=>`<button type="button" role="option" aria-selected="${lang===code}" data-public-language="${code}" class="language-option${lang===code?' selected':''}"><span>${escapeHTML(label)}</span>${lang===code?'<span aria-hidden="true">✓</span>':''}</button>`).join('')}</div></div>`;
 }
 
-function grouped(items, key) {
-  return items.reduce((all, item) => { const name = item[key] || 'Links'; (all[name] ||= []).push(item); return all; }, Object.create(null));
-}
 function linkCard(button, locale) {
   return `<a class="public-link" href="/out/${button.id}" target="_blank" rel="noopener noreferrer" aria-label="${attr(locale.open)} ${attr(button.title)} ${attr(locale.newTab)}">
     ${iconTile(button)}
     <span class="public-link-text"><strong>${escapeHTML(button.title)}</strong><small>${escapeHTML(button.subtitle || locale.cardFallback)}</small></span>
     <span class="public-link-arrow" aria-hidden="true">↗</span>
   </a>`;
-}
-function sampleCategory(title, t) {
-  return title === 'Resources' ? t.categoryResources : title === 'Channels' ? t.categoryChannels : title;
 }
 async function renderPublic() {
   const lang = state.publicLang;
@@ -92,16 +94,19 @@ async function renderPublic() {
   try {
     const data = await api('/api/public');
     const profile = data.profile || {};
-    const groups = grouped(data.links || [], 'category');
+    const links = data.links || [];
     const name = profile.display_name || 'Your Page';
     const avatarText = (profile.avatar_text || monogram(name)).slice(0,8);
     const shape = ['rounded','circle','square'].includes(profile.avatar_shape) ? profile.avatar_shape : 'rounded';
     const background = /^#[a-f0-9]{6}$/i.test(profile.avatar_background || '') ? profile.avatar_background : '#142849';
     document.title = name;
     document.querySelector('link[rel="icon"]')?.setAttribute('href', `/site-icon?v=${encodeURIComponent(profile.updated_at || 0)}`);
-    const avatar = profile.avatar_url
-      ? `<img class="public-avatar-img" src="${attr(profile.avatar_url)}" alt="${attr(name)}" />`
+    const avatarSrc = profile.avatar_data || profile.avatar_url;
+    const avatar = avatarSrc
+      ? `<img class="public-avatar-img" src="${attr(avatarSrc)}" alt="${attr(name)}" />`
       : `<span>${escapeHTML(avatarText)}</span>`;
+    const coverSrc = profile.cover_image_data || profile.cover_image_url;
+    const coverImage = coverSrc ? `<img class="cover-photo" src="${attr(coverSrc)}" alt="" />` : '';
     const intro = profile.headline === 'Everything in one place.' ? t.defaultHeadline : (profile.headline || t.defaultHeadline);
     const bio = profile.bio === 'Follow, explore, and stay connected.' ? t.defaultBio : (profile.bio || '');
     app.innerHTML = `<div class="landing-shell" style="--hub-accent:${attr(profile.accent_color || '#4267e9')}">
@@ -110,18 +115,21 @@ async function renderPublic() {
         <div class="public-topbar">
           ${publicLanguageMenu(lang,t)}
         </div>
-        <header class="profile-head">
-          <div class="public-avatar avatar-${shape}" style="--avatar-bg:${attr(background)}">${avatar}</div>
-          <span class="profile-overline"><span class="online-dot"></span> ${escapeHTML(t.welcome)}</span>
-          <h1>${escapeHTML(name)}</h1>
-          <h2>${escapeHTML(intro)}</h2>
-          <p>${escapeHTML(bio)}</p>
+        <header class="social-profile">
+          <div class="profile-cover">${coverImage}<span class="profile-cover-pattern" aria-hidden="true"></span></div>
+          <div class="profile-identity">
+            <div class="public-avatar avatar-${shape}" style="--avatar-bg:${attr(background)}">${avatar}</div>
+            <div class="profile-info">
+              <span class="profile-overline"><span class="online-dot"></span> ${escapeHTML(t.welcome)}</span>
+              <h1>${escapeHTML(name)}</h1>
+              <h2>${escapeHTML(intro)}</h2>
+              ${bio ? `<p>${escapeHTML(bio)}</p>` : ''}
+            </div>
+          </div>
         </header>
         <div class="profile-divider"><span>${escapeHTML(t.explore)}</span><span class="divider-line"></span></div>
-        <div class="public-groups">${Object.keys(groups).length ? Object.entries(groups).map(([title,links]) => `
-          <section class="public-category"><div class="category-title"><span>${escapeHTML(sampleCategory(title,t))}</span></div>
-          <div class="public-links">${links.map((button)=>linkCard(button,t)).join('')}</div></section>`).join('') : `
-          <div class="public-empty"><span class="public-empty-icon">↗</span><h3>${escapeHTML(t.emptyTitle)}</h3><p>${escapeHTML(t.emptyBody)}</p></div>`}</div>
+        <div class="public-groups"><div class="public-links">${links.length ? links.map((button)=>linkCard(button,t)).join('') : `
+          <div class="public-empty"><span class="public-empty-icon">↗</span><h3>${escapeHTML(t.emptyTitle)}</h3><p>${escapeHTML(t.emptyBody)}</p></div>`}</div></div>
         <footer class="public-footer"><span>${escapeHTML(t.footer)}</span><a href="/" aria-label="LinkHub home">LINKHUB <span aria-hidden="true">↗</span></a></footer>
       </main></div>`;
     const toggle=qs('#language-toggle'),options=qs('#language-options');
@@ -158,12 +166,12 @@ function adminShell(content) {
       <div class="sidebar-spacer"></div>
       <a class="sidebar-visit" href="/" target="_blank" rel="noopener">View public page <span>↗</span></a>
       <button class="sidebar-logout" id="sign-out">Sign out <span>→</span></button>
-      <div class="sidebar-version">LINKHUB · v0.3.2</div>
+      <div class="sidebar-version">LINKHUB · v0.4.0</div>
     </aside>
     <div class="dash-main">
       <header class="dash-topbar"><div class="dash-topbar-title">LINKHUB / <span>${escapeHTML(adminText(tabs.find((tab) => tab[0] === selected)[1],state.adminLang).toUpperCase())}</span></div><div class="dash-topbar-right"><div class="admin-language-menu language-menu"><button type="button" class="language-toggle" id="admin-language-toggle" aria-expanded="false" aria-haspopup="listbox" aria-label="Dashboard language"><span class="language-globe" aria-hidden="true">${globeSvg}</span><span>${state.adminLang==='uk'?'Українська':'English'}</span><span class="language-chevron" aria-hidden="true">${chevronSvg}</span></button><div class="language-options" id="admin-language-options" role="listbox" aria-label="Dashboard language" hidden>${[['en','English'],['uk','Українська']].map(([lang,label])=>`<button type="button" class="language-option${state.adminLang===lang?' selected':''}" role="option" aria-selected="${state.adminLang===lang}" data-admin-language="${lang}"><span>${label}</span>${state.adminLang===lang?'<span aria-hidden="true">✓</span>':''}</button>`).join('')}</div></div><span class="pill-live"><i></i> LIVE</span></div></header>
       <div class="dashboard-content">${content}</div>
-      <footer class="dash-footer">LinkHub v0.3.2 <span>·</span> Cloudflare Workers + D1 <span>·</span> Your data, your links.</footer>
+      <footer class="dash-footer">LinkHub v0.4.0 <span>·</span> Cloudflare Workers + D1 <span>·</span> Your data, your links.</footer>
     </div>
   </div>`;
 }
@@ -175,7 +183,7 @@ function metricCard(label, value, subtitle, icon, tone = '', metric = '') {
 }
 function tableMarkup(items, columns, empty) {
   if (!items?.length) return `<div class="table-empty">${escapeHTML(empty || 'Nothing to show yet.')}</div>`;
-  return `<div class="responsive-table"><table><thead><tr>${columns.map(([title]) => `<th>${title}</th>`).join('')}</tr></thead><tbody>${items.map((entry) => `<tr>${columns.map(([, template]) => `<td>${template(entry)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+  return `<div class="responsive-table"><table><thead><tr>${columns.map(([title]) => `<th>${title}</th>`).join('')}</tr></thead><tbody>${items.map((entry, index) => `<tr>${columns.map(([, template]) => `<td>${template(entry,index)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
 }
 function periodPills() { return `<div class="period-pills" role="group" aria-label="Analytics period">${[['today','Today'],['week','7 days'],['month','This month'],['all','All time']].map(([key, label]) => `<button data-period="${key}" class="period-pill${state.period === key ? ' period-active' : ''}">${label}</button>`).join('')}</div>`; }
 function chartMarkup(chart) {
@@ -199,7 +207,7 @@ function overview() {
     <section class="dash-panel"><div class="panel-title-row"><div><h2>Traffic sources</h2><p>Visits by entry link</p></div><span class="panel-detail">SOURCE MIX</span></div>${trendRows(sources,summary.views.total,'views')}</section></div>
     <div class="dash-two-up"><section class="dash-panel"><div class="panel-title-row"><div><h2>Destination clicks</h2><p>Which buttons people open</p></div><span class="panel-detail">BUTTONS</span></div>${trendRows(buttons,summary.outbound.total,'clicks')}</section>
     <section class="dash-panel"><div class="panel-title-row"><div><h2>Visitor countries</h2><p>Based on Cloudflare's approximate location</p></div><span class="panel-detail">WORLDWIDE</span></div>${trendRows(countries.map(row=>({...row,name:countryName(row.name)})),summary.views.total,'views')}</section></div>
-    <section class="dash-panel"><div class="panel-title-row"><div><h2>Recent activity</h2><p>Latest tracked views and outbound clicks</p></div><span class="panel-detail">${recent.length} RECORDS</span></div>${tableMarkup(recent,[['WHEN', (r) => `<span class="no-wrap">${escapeHTML(formatTime(r.occurred_at))}</span>`],['EVENT',(r)=> `<span class="event-pill ${r.kind === 'view' ? 'event-view':'event-outbound'}">${r.kind === 'view' ? 'Page view':'Outbound click'}</span>`],['ENTRY SOURCE',(r)=>escapeHTML(r.source_name)],['DESTINATION',(r)=>escapeHTML(r.button_name || '—')],['COUNTRY',(r)=>escapeHTML(countryName(r.country))],['VISITOR',(r)=>`<code>${escapeHTML(r.visitor_id.slice(0,8))}…</code>`]],'Your first visit will appear here.')}</section>`;
+    <section class="dash-panel"><div class="panel-title-row"><div><h2>Recent activity</h2><p>Latest tracked views and outbound clicks</p></div><span class="panel-detail">${recent.length} RECORDS</span></div>${tableMarkup(recent,[['#',(r,index)=>String(index+1)],['WHEN', (r) => `<span class="no-wrap">${escapeHTML(formatTime(r.occurred_at))}</span>`],['EVENT',(r)=> `<span class="event-pill ${r.kind === 'view' ? 'event-view':'event-outbound'}">${r.kind === 'view' ? 'Page view':'Outbound click'}</span>`],['ENTRY SOURCE',(r)=>escapeHTML(r.source_name)],['DESTINATION',(r)=>escapeHTML(r.button_name || '—')],['COUNTRY',(r)=>escapeHTML(countryName(r.country))],['VISITOR',(r)=>`<code>${escapeHTML(r.visitor_id.slice(0,8))}…</code>`]],'Your first visit will appear here.')}</section>`;
 }
 async function metricDetails(metric) {
   const titles={views:'Page views',unique:'Unique visitors',outbound:'Outbound clicks'};
@@ -214,7 +222,7 @@ async function metricDetails(metric) {
     const period={today:'Today',week:'Last 7 days',month:'This month',all:'All time'}[state.period];
     const summary=metric==='unique'?'One row per anonymous browser in this period':'Event log for this metric';
     const display=`<div class="metric-detail-intro"><strong>${escapeHTML(period)}</strong><span>${escapeHTML(summary)}</span><small>Showing ${count} of at most 250 most relevant records</small></div>
-      ${tableMarkup(data.records,[['WHEN',(r)=>escapeHTML(formatTime(r.occurred_at))],['SOURCE',(r)=>escapeHTML(r.source_name||'Direct')],['DESTINATION',(r)=>escapeHTML(r.button_name||'—')],['COUNTRY',(r)=>escapeHTML(countryName(r.country))],['DEVICE',(r)=>escapeHTML(r.device||'Unknown')],['VISITOR',(r)=>`<code title="${attr(r.visitor_id)}">${escapeHTML(r.visitor_id.slice(0,12))}…</code>`],['ACTIONS',(r)=>`<button type="button" class="btn btn-danger-ghost event-delete-button" data-delete-event="${Number(r.id)}" aria-label="Delete event">Delete</button>`]],'No records for this period.')}`;
+      ${tableMarkup(data.records,[['#',(r,index)=>String(index+1)],['WHEN',(r)=>escapeHTML(formatTime(r.occurred_at))],['SOURCE',(r)=>escapeHTML(r.source_name||'Direct')],['DESTINATION',(r)=>escapeHTML(r.button_name||'—')],['COUNTRY',(r)=>escapeHTML(countryName(r.country))],['DEVICE',(r)=>escapeHTML(r.device||'Unknown')],['VISITOR',(r)=>`<code title="${attr(r.visitor_id)}">${escapeHTML(r.visitor_id.slice(0,12))}…</code>`],['ACTIONS',(r)=>`<button type="button" class="btn btn-danger-ghost event-delete-button" data-delete-event="${Number(r.id)}" aria-label="Delete event">Delete</button>`]],'No records for this period.')}`;
     qs('.metric-detail-loading',box).outerHTML=display;
     translateAdmin(box,state.adminLang);
     qsa('[data-delete-event]',box).forEach((button)=>button.addEventListener('click',()=>void confirmEventDeletion(Number(button.dataset.deleteEvent),metric)));
@@ -236,45 +244,28 @@ async function confirmEventDeletion(id, metric) {
 }
 function copyButton(text, label = 'Copy') { return `<button type="button" class="btn btn-subtle btn-copy" data-copy="${attr(text)}"><span>⧉</span> ${label}</button>`; }
 function linksTab() {
-  // Category order and row order match the public landing page.
-  // Hidden buttons are retained in admin and marked Hidden.
-  const categories = grouped(state.buttons, 'category');
-  const orderedCategoryNames = [
-    ...new Set([...state.buttons.filter(item=>item.active), ...state.buttons].map(item=>item.category || 'Links'))
-  ];
-  const rows = orderedCategoryNames.map(category => {
-    const items = categories[category];
-    return `
-    <section class="manage-category" aria-label="${attr(category)}">
-      <div class="manage-category-heading">
-        <h2>${escapeHTML(category)}</h2>
-        <span class="manage-category-count">${items.length} ${items.length === 1 ? 'link' : 'links'}</span>
+  const rows=state.buttons.map((item,index)=>`
+    <article class="manage-card">
+      <div class="manage-card-left">
+        <span class="manage-icon" style="background:${attr(item.accent)}">${iconTile(item)}</span>
+        <div class="manage-card-copy"><div class="manage-title">${escapeHTML(item.title)} <span class="mini-status ${item.active ? 'mini-on':'mini-off'}">${item.active ? 'Live' : 'Hidden'}</span></div>
+          <p>${escapeHTML(item.subtitle || item.url)}</p><small>${escapeHTML(item.url)}</small>
+        </div>
       </div>
-      <div class="manage-grid">${items.map((item, index) => `
-        <article class="manage-card">
-          <div class="manage-card-left">
-            <span class="manage-icon" style="background:${attr(item.accent)}">${iconTile(item)}</span>
-            <div class="manage-card-copy"><div class="manage-title">${escapeHTML(item.title)} <span class="mini-status ${item.active ? 'mini-on':'mini-off'}">${item.active ? 'Live' : 'Hidden'}</span></div>
-              <p>${escapeHTML(item.subtitle || item.url)}</p>
-              <small>${escapeHTML(item.url)}</small>
-            </div>
-          </div>
-          <div class="manage-card-actions">
-            <div class="order-controls">
-              <button type="button" data-move="${item.id}" data-direction="up" ${index===0?'disabled':''} title="Move up" aria-label="Move up">↑</button>
-              <button type="button" data-move="${item.id}" data-direction="down" ${index===items.length-1?'disabled':''} title="Move down" aria-label="Move down">↓</button>
-            </div>
-            ${copyButton(`${location.origin}/out/${item.id}`,'Copy link')}
-            <button class="btn btn-outline" data-edit="buttons" data-id="${item.id}">Edit</button>
-            <button class="btn btn-danger-ghost" data-delete="buttons" data-id="${item.id}">Delete</button>
-          </div>
-        </article>`).join('')}</div>
-    </section>`;
-  }).join('');
-  return `<section class="page-heading"><div><div class="eyebrow">YOUR DESTINATIONS</div><h1>My links</h1><p>These are the buttons visitors see on your public page.</p></div><button class="btn btn-primary" data-add="buttons">+ Add a link</button></section>
-    <div class="info-strip"><span>◎</span><div><strong>Two separate metrics.</strong> LinkHub tracks visits to your page and clicks on these buttons. Sample links are visible on the public page and lead to safe example.com addresses until replaced.</div></div>
-    <div class="manage-categories">${rows || `<div class="public-empty"><h3>Nothing here yet.</h3><p>Add your first destination link.</p></div>`}</div>
-    <p class="helper-note">Visitors open a button through a tracked <code>/out/ID</code> URL. You can edit the real destination without changing the button's tracking address.</p>`;
+      <div class="manage-card-actions">
+        <div class="order-controls">
+          <button type="button" data-move="${item.id}" data-direction="up" ${index===0?'disabled':''} title="Move up" aria-label="Move up">↑</button>
+          <button type="button" data-move="${item.id}" data-direction="down" ${index===state.buttons.length-1?'disabled':''} title="Move down" aria-label="Move down">↓</button>
+        </div>
+        ${copyButton(`${location.origin}/out/${item.id}`,'Copy link')}
+        <button class="btn btn-outline" data-edit="buttons" data-id="${item.id}">Edit</button>
+        <button class="btn btn-danger-ghost" data-delete="buttons" data-id="${item.id}">Delete</button>
+      </div>
+    </article>`).join('');
+  return `<section class="page-heading"><div><div class="eyebrow">YOUR DESTINATIONS</div><h1>My links</h1><p>Manage all destination buttons in one ordered list.</p></div><button class="btn btn-primary" data-add="buttons">+ Add a link</button></section>
+    <div class="info-strip"><span>◎</span><div><strong>Two separate metrics.</strong> LinkHub records page visits and tracked destination clicks independently.</div></div>
+    <div class="manage-grid ungrouped-links">${rows || `<div class="public-empty"><h3>Nothing here yet.</h3><p>Add your first destination link.</p></div>`}</div>
+    <p class="helper-note">Each button has a tracked <code>/out/ID</code> URL. Updating its destination does not change that tracking address.</p>`;
 }
 function sourceTab() {
   return `<section class="page-heading"><div><div class="eyebrow">KNOW WHERE PEOPLE COME FROM</div><h1>Traffic sources</h1><p>Share a different entry URL on each platform; every URL opens the same LinkHub page.</p></div><button class="btn btn-primary" data-add="sources">+ Add a source</button></section>
@@ -288,12 +279,20 @@ function appearanceTab() {
     <section class="dash-panel appearance-panel"><div class="panel-title-row"><div><h2>Profile details</h2><p>Changes appear on all entry URLs immediately.</p></div><span class="panel-detail">PUBLIC PROFILE</span></div>
       <form id="profile-form" class="field-form"><div class="form-row"><label>Display name<input name="display_name" maxlength="80" required value="${attr(item.display_name || '')}" placeholder="Your page" /></label><label>Headline<input name="headline" maxlength="140" value="${attr(item.headline || '')}" placeholder="Everything in one place" /></label></div>
       <label>Bio<textarea name="bio" rows="3" maxlength="300" placeholder="Introduce yourself or your project">${escapeHTML(item.bio || '')}</textarea></label>
-      <section class="appearance-inner-panel"><h3>Profile avatar</h3><p>Use a hosted image, or a custom letter tile when no image is provided.</p>
-        <label>Avatar image URL <span class="form-optional">optional · HTTPS</span><input name="avatar_url" type="url" value="${attr(item.avatar_url || '')}" placeholder="https://example.com/avatar.png" /></label>
-        <div class="form-row"><label>Avatar text<input name="avatar_text" maxlength="8" value="${attr(item.avatar_text || '')}" placeholder="AB" /></label>
-          <label>Avatar background<input name="avatar_background" type="color" value="${attr(item.avatar_background || '#142849')}" /></label></div>
+      <section class="appearance-inner-panel profile-editor-panel"><h3>Profile header</h3><p>Customize the cover artwork, avatar and identity — just like a social profile.</p>
+        <div class="social-profile-preview" aria-label="Profile preview"><div class="profile-cover profile-cover-preview">${item.cover_image_data || item.cover_image_url ? `<img class="cover-photo" src="${attr(item.cover_image_data || item.cover_image_url)}" alt="" />` : ''}<span class="profile-cover-pattern" aria-hidden="true"></span></div>
+          <div class="profile-identity"><div class="public-avatar avatar-${attr(item.avatar_shape || 'rounded')} avatar-preview" style="--avatar-bg:${attr(item.avatar_background || '#142849')}">${item.avatar_data || item.avatar_url ? `<img src="${attr(item.avatar_data || item.avatar_url)}" alt="Avatar preview"/>` : escapeHTML(item.avatar_text || monogram(item.display_name || 'AB'))}</div><div><strong class="profile-name-preview">${escapeHTML(item.display_name || 'Your Page')}</strong><small>Public profile preview</small></div></div>
+        </div>
+        <div class="profile-editor-grid">
+          <div class="profile-editor-field"><label>Cover image URL <span class="form-optional">optional · HTTPS</span><input name="cover_image_url" type="url" value="${attr(item.cover_image_url || '')}" placeholder="https://example.com/cover.jpg" /></label>
+            <span class="file-field-title">Or upload a cover (PNG, JPG, WebP · up to 256 KB)</span><label class="file-picker" for="cover-upload"><span class="file-picker-icon" aria-hidden="true">↑</span><span class="file-picker-action">Choose cover</span><span class="file-picker-name" id="cover-file-label">No file selected</span></label><input id="cover-upload" class="visually-hidden-input" type="file" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" /><button type="button" class="btn btn-outline remove-profile-image" id="remove-cover">Remove cover</button></div>
+          <div class="profile-editor-field"><label>Avatar image URL <span class="form-optional">optional · HTTPS</span><input name="avatar_url" type="url" value="${attr(item.avatar_url || '')}" placeholder="https://example.com/avatar.png" /></label>
+            <span class="file-field-title">Or upload an avatar (PNG, JPG, WebP · up to 256 KB)</span><label class="file-picker" for="avatar-upload"><span class="file-picker-icon" aria-hidden="true">↑</span><span class="file-picker-action">Choose avatar</span><span class="file-picker-name" id="avatar-file-label">No file selected</span></label><input id="avatar-upload" class="visually-hidden-input" type="file" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" /><button type="button" class="btn btn-outline remove-profile-image" id="remove-avatar">Remove avatar image</button></div>
+        </div>
+        <div class="form-row"><label>Fallback avatar letters<input name="avatar_text" maxlength="8" value="${attr(item.avatar_text || '')}" placeholder="AB" /></label>
+          <label>Fallback avatar background<input name="avatar_background" type="color" value="${attr(item.avatar_background || '#142849')}" /></label></div>
         <label>Avatar shape<select name="avatar_shape"><option value="rounded" ${item.avatar_shape==='rounded'||!item.avatar_shape?'selected':''}>Rounded</option><option value="square" ${item.avatar_shape==='square'?'selected':''}>Square</option><option value="circle" ${item.avatar_shape==='circle'?'selected':''}>Circle</option></select></label>
-        <div class="avatar-preview-row"><div class="public-avatar avatar-${attr(item.avatar_shape || 'rounded')} avatar-preview" style="--avatar-bg:${attr(item.avatar_background || '#142849')}">${item.avatar_url ? `<img src="${attr(item.avatar_url)}" alt="Avatar preview"/>` : escapeHTML(item.avatar_text || monogram(item.display_name || 'AB'))}</div><span>Avatar preview</span></div>
+        <input type="hidden" name="clear_cover_image" value="0" /><input type="hidden" name="clear_avatar_image" value="0" />
       </section>
       <section class="appearance-inner-panel"><h3>Site favicon</h3><p>Upload a PNG, WebP or ICO file (up to 60 KB). The icon is shown in browser tabs.</p>
         <div class="favicon-controls"><img id="favicon-preview" src="/site-icon?v=${encodeURIComponent(item.updated_at||0)}" alt="Current favicon" />
@@ -305,6 +304,7 @@ function appearanceTab() {
       <div class="form-bottom"><button class="btn btn-primary" type="submit">Save appearance</button></div></form></section>`;
 }
 function renderAdmin() {
+  document.documentElement.lang=state.adminLang==='uk'?'uk':'en';
   const content = state.tab === 'overview' ? overview() : state.tab === 'links' ? linksTab() : state.tab === 'sources' ? sourceTab() : appearanceTab();
   app.innerHTML = adminShell(content);
   wireAdmin();
@@ -313,7 +313,7 @@ function renderAdmin() {
 function loginView(configured) {
   document.title = 'Sign in · LinkHub';
   app.innerHTML = `<main class="login-shell"><div class="login-glow"></div><div class="login-card"><a href="/" class="login-back">← Back to my page</a><div class="login-logo">↗</div><div class="eyebrow">PRIVATE WORKSPACE</div><h1>Welcome back</h1><p>Sign in to manage your links and traffic analytics.</p><form id="login-form" class="login-form"><label>Password<div class="password-wrap"><input id="password" name="password" type="password" required autocomplete="current-password" placeholder="Enter your password"/><button type="button" class="password-toggle" id="toggle-password" aria-label="Show password">Show</button></div></label><button type="submit" class="btn btn-primary btn-wide">Sign in <span>→</span></button></form>${configured ? '' : '<div class="login-warning">Admin secrets are missing. Follow README.md to set up ADMIN_PASSWORD and SESSION_SECRET.</div>'}<div class="login-footer">LINKHUB <span>·</span> SECURE ADMIN AREA</div></div></main>`;
-  translateAdmin(app, state.adminLang);
+  document.documentElement.lang='en'; // Login is English even when the admin UI preference is Ukrainian.
   qs('#toggle-password').onclick = () => { const input=qs('#password'), visible = input.type === 'password'; input.type=visible?'text':'password';qs('#toggle-password').textContent=visible?'Hide':'Show';qs('#toggle-password').setAttribute('aria-label',visible?'Hide password':'Show password'); };
   qs('#login-form').onsubmit = async (event) => {
     event.preventDefault();const button=event.currentTarget.querySelector('[type="submit"]');button.disabled=true;
@@ -426,7 +426,6 @@ function openEditor(type, existing = null) {
   else fields=`<label>Button title<input name="title" value="${attr(existing?.title || '')}" placeholder="Example Resource" maxlength="70" required/></label>
     <label>Description<input name="subtitle" value="${attr(existing?.subtitle || '')}" placeholder="Describe this resource" maxlength="120" /></label>
     <label>Destination URL<input name="url" type="url" required value="${attr(existing?.url || '')}" placeholder="https://example.com/your-resource" /></label>
-    <label>Section / category<input name="category" value="${attr(existing?.category || 'Resources')}" placeholder="Resources" maxlength="50"/></label>
     <div class="form-color-field"><span>Card color</span><div class="color-choices">${palette.map(([color, title])=> `<label title="${title}" class="color-choice"><input type="radio" name="accent" value="${color}" ${(!existing?.accent ? color===palette[0][0] : existing.accent===color) ? 'checked':''}/><span style="background:${color}"></span></label>`).join('')}</div></div>
     <section class="button-icon-settings"><h3>Button icon</h3><p>Automatic favicon from the destination, image URL, your own file, or the default arrow.</p>
       <div class="icon-mode-field"><span class="icon-mode-field-label">Icon mode</span>${iconModePicker(existing?.icon_mode||'auto')}</div>
@@ -452,7 +451,7 @@ function openEditor(type, existing = null) {
     event.preventDefault();
     const form=event.currentTarget;const values=Object.fromEntries(new FormData(form));
     const data=isSource ? {name:values.name,slug:values.slug.toLowerCase(),active:form.querySelector('[name="active"]').checked}
-      : {title:values.title,subtitle:values.subtitle,url:values.url,category:values.category,accent:values.accent,active:form.querySelector('[name="active"]').checked,
+      : {title:values.title,subtitle:values.subtitle,url:values.url,category:'Links',accent:values.accent,active:form.querySelector('[name="active"]').checked,
           icon_mode:values.icon_mode||'auto', icon_url:values.icon_url||'', icon_data:existing?.icon_data||''};
     const submit=form.querySelector('[type="submit"]');submit.disabled=true;
     try {
@@ -492,13 +491,22 @@ function askDelete(type,id) {
 function updateAvatarPreview() {
   const display=qs('.avatar-preview'); if(!display)return;
   const name=qs('[name="display_name"]')?.value || 'AB';
-  const url=qs('[name="avatar_url"]')?.value || '';
+  const url=qs('#avatar-upload')?.dataset.previewUrl || qs('[name="avatar_url"]')?.value || (qs('[name="clear_avatar_image"]')?.value==='1' ? '' : (state.profile?.avatar_data || ''));
   const shape=qs('[name="avatar_shape"]')?.value || 'rounded';
   const background=qs('[name="avatar_background"]')?.value || '#142849';
   display.className=`public-avatar avatar-preview avatar-${shape}`;
   display.style.setProperty('--avatar-bg',background);
-  if(url && /^https?:\/\//.test(url)) display.innerHTML=`<img src="${attr(url)}" alt="Avatar preview"/>`;
+  if(url && /^(https?:\/\/|data:image\/(?:png|jpeg|webp);base64,|blob:)/.test(url)) display.innerHTML=`<img src="${attr(url)}" alt="Avatar preview"/>`;
   else display.textContent=qs('[name="avatar_text"]')?.value || monogram(name);
+  const cover=qs('.profile-cover-preview');
+  if(cover) {
+    const coverFile=qs('#cover-upload')?.dataset.previewUrl;
+    const coverUrl=coverFile || qs('[name="cover_image_url"]')?.value || (qs('[name="clear_cover_image"]')?.value==='1' ? '' : (state.profile?.cover_image_data || ''));
+    let image=qs('.cover-photo',cover);
+    if(coverUrl){if(!image){image=document.createElement('img');image.className='cover-photo';image.alt='';cover.prepend(image);}image.src=coverUrl;}
+    else image?.remove();
+  }
+  const namePreview=qs('.profile-name-preview');if(namePreview)namePreview.textContent=name;
 }
 function wireAdmin() {
   const adminToggle=qs('#admin-language-toggle'),adminOptions=qs('#admin-language-options');
@@ -520,7 +528,44 @@ function wireAdmin() {
     qs('.favicon-action-row .setting-status').textContent='Default favicon will be restored on save';
   });
   qs('#favicon-upload')?.addEventListener('change', (event) => { qs('[name="clear_favicon"]').value='0'; const name=qs('#favicon-file-label');if(name)name.textContent=event.target.files?.[0]?.name||'No file selected'; });
-  for (const selector of ['[name="avatar_text"]','[name="avatar_background"]','[name="avatar_shape"]','[name="avatar_url"]','[name="display_name"]']) {
+  for(const [kind, inputId, labelId] of [['avatar','avatar-upload','avatar-file-label'],['cover','cover-upload','cover-file-label']]) {
+    qs('#'+inputId)?.addEventListener('change', (event)=>{
+      const file=event.target.files?.[0];
+      const input=event.target;
+      if(input.dataset.previewUrl)URL.revokeObjectURL(input.dataset.previewUrl);
+      input.dataset.previewUrl=file ? URL.createObjectURL(file) : '';
+      qs('#'+labelId).textContent=file?.name || 'No file selected';
+      if(file)qs(`[name="clear_${kind}_image"]`).value='0';
+      updateAvatarPreview();
+    });
+  }
+  qs('#remove-cover')?.addEventListener('click',()=>{
+    qs('[name="clear_cover_image"]').value='1'; qs('[name="cover_image_url"]').value='';
+    const file=qs('#cover-upload');if(file.dataset.previewUrl)URL.revokeObjectURL(file.dataset.previewUrl);
+    file.dataset.previewUrl='';file.value='';qs('#cover-file-label').textContent='No file selected';
+    updateAvatarPreview();
+  });
+  qs('#remove-avatar')?.addEventListener('click',()=>{
+    qs('[name="clear_avatar_image"]').value='1'; qs('[name="avatar_url"]').value='';
+    const file=qs('#avatar-upload');if(file.dataset.previewUrl)URL.revokeObjectURL(file.dataset.previewUrl);
+    file.dataset.previewUrl='';file.value='';qs('#avatar-file-label').textContent='No file selected';
+    updateAvatarPreview();
+  });
+  // When a hosted image URL is entered, prefer it over any previously stored upload.
+  for(const [kind, urlField, fileId, labelId] of [
+    ['avatar','avatar_url','avatar-upload','avatar-file-label'],
+    ['cover','cover_image_url','cover-upload','cover-file-label']
+  ]) {
+    qs(`[name="${urlField}"]`)?.addEventListener('input',event=>{
+      if(!event.target.value.trim())return;
+      qs(`[name="clear_${kind}_image"]`).value='1';
+      const input=qs('#'+fileId);
+      if(input.dataset.previewUrl)URL.revokeObjectURL(input.dataset.previewUrl);
+      input.dataset.previewUrl='';input.value='';qs('#'+labelId).textContent='No file selected';
+      updateAvatarPreview();
+    });
+  }
+  for (const selector of ['[name="avatar_text"]','[name="avatar_background"]','[name="avatar_shape"]','[name="avatar_url"]','[name="cover_image_url"]','[name="display_name"]']) {
     qs(selector)?.addEventListener('input', updateAvatarPreview);
     qs(selector)?.addEventListener('change', updateAvatarPreview);
   }
@@ -539,13 +584,9 @@ function wireAdmin() {
   qsa('[data-move]').forEach((el)=>el.onclick=async()=>{
     const button=state.buttons.find(item=>item.id===Number(el.dataset.move));
     if(!button)return;
-    const category=button.category || 'Links';
-    const siblings=state.buttons.filter(item=>(item.category||'Links')===category);
-    const siblingIndex=siblings.findIndex(item=>item.id===button.id);
-    const nextSibling=siblings[siblingIndex+(el.dataset.direction==='up'?-1:1)];
+    const index=state.buttons.findIndex(item=>item.id===button.id);
+    const nextSibling=state.buttons[index+(el.dataset.direction==='up'?-1:1)];
     if(!nextSibling)return;
-    // Swap only this category's adjacent members in the global sort order.
-    // Public and admin category lists therefore retain the same ordering.
     const ids=state.buttons.map(item=>item.id);
     const current=ids.indexOf(button.id),target=ids.indexOf(nextSibling.id);
     [ids[current],ids[target]]=[ids[target],ids[current]];
@@ -563,8 +604,12 @@ function wireAdmin() {
         favicon=await new Promise((resolve,reject) => { const reader=new FileReader(); reader.onload=()=>resolve(reader.result); reader.onerror=()=>reject(new Error('Could not read favicon'));reader.readAsDataURL(file); });
         if(/\.ico$/i.test(file.name) && !/^data:image\/(?:x-icon|vnd\.microsoft\.icon);/.test(favicon)) favicon=favicon.replace(/^data:[^;]+;/,'data:image/x-icon;');
       }
-      const data={...values, show_top_brand:false, show_top_tagline:false, favicon_data:favicon};
-      delete data.clear_favicon;
+      const data={...values, favicon_data:favicon,
+        cover_image_data:values.clear_cover_image==='1' ? '' : (state.profile?.cover_image_data || ''),
+        avatar_data:values.clear_avatar_image==='1' ? '' : (state.profile?.avatar_data || '')};
+      if(qs('#cover-upload')?.files?.[0]) data.cover_image_data=await readProfileFile(qs('#cover-upload').files[0]);
+      if(qs('#avatar-upload')?.files?.[0]) data.avatar_data=await readProfileFile(qs('#avatar-upload').files[0]);
+      delete data.clear_favicon;delete data.clear_cover_image;delete data.clear_avatar_image;
       await api('/api/admin/profile',{method:'PUT',data});await refreshAdmin({analytics:false});toast('Public page updated');
     } catch(error){toast(error.message,'error');button.disabled=false;}
   });

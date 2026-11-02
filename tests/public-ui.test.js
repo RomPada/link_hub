@@ -33,6 +33,9 @@ test('public landing renders visible sample buttons and all five interface langu
   await import(`../public/app.js?smoke=${Date.now()}`);
   await new Promise(resolve => setTimeout(resolve,30));
   assert.match(app.innerHTML,/Example Resource One/);
+  assert.match(app.innerHTML,/class="social-profile"/);
+  assert.doesNotMatch(app.innerHTML,/class="public-category"/);
+  assert.match(app.innerHTML,/class="profile-cover"/);
   assert.match(app.innerHTML,/language-toggle/);
   assert.doesNotMatch(app.innerHTML,/divider-spark/);
   assert.doesNotMatch(app.innerHTML,/Links<\/title>/);

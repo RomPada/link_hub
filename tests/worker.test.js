@@ -8,6 +8,7 @@ test('slug validation rejects routes reserved for the app', () => {
   assert.equal(isValidSlug('source-one'), true);
   assert.equal(isValidSlug('go'), false);
   assert.equal(isValidSlug('admin'), false);
+  assert.equal(isValidSlug('admn'), false);
   assert.equal(isValidSlug('my-campaign_1'), true);
   assert.equal(isValidSlug('javascript:alert(1)'), false);
 });
@@ -76,7 +77,10 @@ test('source URL renders the hub and records an attributed page view', async () 
 test('root visits are recorded as Direct; admin login page is not tracked', async () => {
   const events = [], ctx = waitContext(), env = makeEnvironment(events);
   await worker.fetch(request('/'), env, ctx);
-  await worker.fetch(request('/admin'), env, ctx);
+  const loginPage=await worker.fetch(request('/admn'), env, ctx);
+  const oldAddress=await worker.fetch(request('/admin'),env,ctx);
+  assert.equal(loginPage.status,200);
+  assert.equal(oldAddress.status,404);
   await Promise.all(ctx.tasks);
   assert.equal(events.length, 1);
   assert.equal(events[0][2], 'Direct');
