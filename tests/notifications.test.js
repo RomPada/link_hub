@@ -91,6 +91,7 @@ test('Web Push request uses encrypted body and authenticated VAPID header',async
   const response=await sendWebPush(sub,{title:'Testing'},config,async(endpoint, options)=>{
     assert.equal(endpoint,sub.endpoint);assert.match(options.headers.Authorization,/^vapid t=/);
     assert.equal(options.headers['Content-Encoding'],'aes128gcm');assert.ok(options.body.byteLength>86);
+    assert.equal(options.redirect,'manual','Workers must not use unsupported redirect:error, or follow push endpoint redirects');
     return new Response(null,{status:201});
   });
   assert.equal(response.status,201);
@@ -149,4 +150,32 @@ test('new visitor push is delivered without changing page view counts, and repea
     await againContext.settle();assert.equal(repeat.status,200);assert.equal(sends.length,1);
     assert.equal(db.prepare(`SELECT COUNT(*) AS n FROM events WHERE kind='view'`).get().n,2);
   } finally {globalThis.fetch=baseFetch;}
+});
+
+test('failed browser push test shows HTTP status and allows immediate retry',async()=>{
+  const {db,DB}=setupDatabase(),config=await keys();
+  const env={DB,ADMIN_PASSWORD:'a_long_test_password_123',SESSION_SECRET:'a-v3ry-long-unique-session-secret-that-is-at-least-32-chars',
+    VAPID_PUBLIC_KEY:config.publicKey,VAPID_PRIVATE_KEY:config.privateKey,VAPID_SUBJECT:config.subject};
+  const login=await worker.fetch(req('/api/admin/login','POST',{password:env.ADMIN_PASSWORD}),env,ctx());
+  const sessionCookie=login.headers.get('set-cookie').split(';')[0];
+  const sub=removePrivate(await browserSubscription());
+  const register=await worker.fetch(req('/api/admin/notifications/subscribe','POST',sub,sessionCookie),env,ctx());
+  const hash=(await register.json()).endpoint_hash;
+  const previous=globalThis.fetch;
+  let attempts=0;
+  globalThis.fetch=async(_endpoint,options)=>{
+    assert.equal(options.redirect,'manual');
+    attempts++;
+    return new Response(null,{status:attempts===1?403:201});
+  };
+  try {
+    const failed=await worker.fetch(req('/api/admin/notifications/test','POST',{endpoint_hash:hash},sessionCookie),env,ctx());
+    assert.equal(failed.status,502);
+    assert.match((await failed.json()).error,/authentication \(403\)/i);
+    assert.equal(db.prepare('SELECT last_test_at FROM push_subscriptions WHERE endpoint_hash=?').get(hash).last_test_at,0);
+    const passed=await worker.fetch(req('/api/admin/notifications/test','POST',{endpoint_hash:hash},sessionCookie),env,ctx());
+    assert.equal(passed.status,200);
+    assert.equal((await passed.json()).accepted,true);
+    assert.equal(attempts,2);
+  } finally {globalThis.fetch=previous;}
 });

@@ -1,5 +1,5 @@
 import { sendWebPush, validPushSubscription, decodeB64url } from "./web-push.js";
-/** LinkHub v0.5.0 — one Cloudflare Worker + D1 + static assets.
+/** LinkHub v0.5.1 — one Cloudflare Worker + D1 + static assets.
  * Analytics counts page visits and outbound button clicks separately.
  * No raw IP addresses or HTTP referrers are stored.
  */
@@ -265,11 +265,23 @@ async function notificationsApi(request, env, operation, method) {
       await delivered.body?.cancel();
       if (delivered.status === 404 || delivered.status === 410) {
         await env.DB.prepare('DELETE FROM push_subscriptions WHERE endpoint_hash=?').bind(hash).run();
-        return fail('This subscription expired. Enable notifications again.',410);
+        return fail('This browser push subscription expired. Enable notifications again on your Android device.',410);
       }
-      if (!delivered.ok) return fail(`Push service rejected the request (${delivered.status}). Check VAPID keys.`,502);
+      if (!delivered.ok) {
+        console.warn('Push test rejected by browser push service', {status:delivered.status});
+        // A failed test must not make the admin wait for the 30-second test interval.
+        await env.DB.prepare('UPDATE push_subscriptions SET last_test_at=0 WHERE endpoint_hash=? AND last_test_at=?').bind(hash,now).run();
+        if (delivered.status >= 300 && delivered.status < 400) return fail('The browser push service unexpectedly redirected the request. Re-enable notifications on your device.',502);
+        if (delivered.status === 401 || delivered.status === 403) return fail(`Push service rejected authentication (${delivered.status}). Check the VAPID key pair and subject on Cloudflare.`,502);
+        if (delivered.status === 429) return fail('Browser push service rate-limited this request. Try again later.',503);
+        return fail(`Browser push service did not accept the notification (HTTP ${delivered.status}).`,502);
+      }
       return json({ ok:true, accepted:true });
-    } catch (error) { console.error('Push test failed',error); return fail('Could not contact the browser push service.',502); }
+    } catch (error) {
+      console.error('Push test request failed:',error instanceof Error ? error.message : String(error));
+      await env.DB.prepare('UPDATE push_subscriptions SET last_test_at=0 WHERE endpoint_hash=? AND last_test_at=?').bind(hash,now).run();
+      return fail('Could not contact the browser push service. Check Worker logs and your network connection.',502);
+    }
   }
   return fail('Unknown notification endpoint',404);
 }
@@ -306,8 +318,14 @@ async function notifyForEvent(env, event) {
         {title:`LinkHub · ${title}`, body, url:'/admn'},config);
       await push.body?.cancel();
       if ([404,410].includes(push.status)) await env.DB.prepare('DELETE FROM push_subscriptions WHERE endpoint_hash=?').bind(sub.endpoint_hash).run();
-      else if (!push.ok) console.warn('Push service declined notification',push.status);
-    } catch (error) { console.warn('Push delivery failed',error?.message || error); }
+      else if (!push.ok) {
+        console.warn('Push service declined notification',push.status);
+        await env.DB.prepare('UPDATE push_subscriptions SET last_sent_at=0 WHERE endpoint_hash=? AND last_sent_at=?').bind(sub.endpoint_hash,now).run();
+      }
+    } catch (error) {
+      console.warn('Push delivery failed',error?.message || error);
+      await env.DB.prepare('UPDATE push_subscriptions SET last_sent_at=0 WHERE endpoint_hash=? AND last_sent_at=?').bind(sub.endpoint_hash,now).run();
+    }
   });
   await Promise.allSettled(deliveries);
 }

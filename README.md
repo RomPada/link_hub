@@ -2,7 +2,7 @@
 
 A self-hosted, single-profile link landing page with independent analytics for incoming visits and outbound destination clicks. Built on **Cloudflare Workers**, **Cloudflare D1**, and lightweight browser-native HTML/CSS/JavaScript.
 
-**Version:** 0.5.0 · **Runtime:** Cloudflare Workers · **Database:** D1 (SQLite) · **Default public language:** English
+**Version:** 0.5.1 · **Runtime:** Cloudflare Workers · **Database:** D1 (SQLite) · **Default public language:** English
 
 ## Overview
 
@@ -47,13 +47,13 @@ Source attribution reflects the entry URL used, not a verified upstream website.
 **Appearance and layout**
 
 - The full-width Appearance form includes a social-profile preview and controls for cover image URL/upload/removal, avatar image URL/upload/removal, fallback letters, avatar shape, and accent color.
-- The public-page shortcut remains available in the sidebar, without a duplicate action inside Appearance. Mobile navigation uses a dropdown instead of horizontally scrolling tabs.
+- The public-page shortcut remains available in the sidebar, without a duplicate action inside Appearance. Mobile navigation uses a full-width sticky header with a burger-menu button instead of horizontally scrolling tabs. The menu stays accessible while the page scrolls.
 
 **Operational design**
 
 - No runtime dependency on third-party analytics products.
 - No React/Next.js build step; assets are deployed with one Worker.
-- D1 migration files are additive and applied using Wrangler. v0.5.0 adds a dedicated device-subscriptions migration (0005_notifications.sql).
+- D1 migration files are additive and applied using Wrangler. v0.5.0 introduced device subscriptions (`0005_notifications.sql`); v0.5.1 does not change the database schema.
 - Runs on Cloudflare Free plans within the platform's request and database limits. A `*.workers.dev` deployment doesn't require a purchased domain.
 
 ## Requirements
@@ -62,27 +62,25 @@ Source attribution reflects the entry URL used, not a verified upstream website.
 - npm, a Cloudflare account, and Wrangler (installed through `npm install`).
 - An existing D1 database for upgrades, or a new database for first installation.
 
-## Upgrade from v0.4.0
+## Upgrade from v0.5.0
 
-Use the existing GitHub repository, Worker and Cloudflare D1 database. Retain the actual `database_id` in `wrangler.jsonc` and **never overwrite `.dev.vars`** during the upgrade.
+Keep your current GitHub repository, Worker, D1 database, `.dev.vars`, `wrangler.jsonc` database ID, and existing production secrets. **No database migration or VAPID key rotation is required for v0.5.1.**
 
-Apply the new D1 migration **before starting the updated Worker**:
+Run:
 
 ```bash
 npm install
 npm test
-npm run db:local
 npm run dev
 ```
 
-For your deployed site, apply the remote D1 migration **before deploying the new code**:
+If the local app looks correct, publish the changed Worker and frontend files:
 
 ```bash
-npm run db:remote
 npm run deploy
 ```
 
-`migrations/0005_notifications.sql` adds device subscriptions without touching visits, destinations, profile or sessions. Push sending remains disabled until VAPID secrets are configured. All other features continue to work.
+Reopen the Android admin PWA at `/admn` and use **Notifications → Send test**. The original VAPID key pair and subscribed device should continue to work. If the test is rejected, read the exact HTTP status and consult the troubleshooting steps below. Cloudflare returns an HTTP response indicating that the browser push service **accepted** the encrypted message; this does not guarantee an Android system notification was shown.
 
 ## Quick start: local development
 
@@ -161,6 +159,7 @@ Wrangler prints the `*.workers.dev` address after deployment. Configure the prof
 | `migrations/0002_public_identity.sql` | Public identity and custom site favicon fields |
 | `migrations/0003_button_icons.sql` | Destination button icon mode, URL, and uploaded image |
 | `migrations/0004_profile_header.sql` | Cover-image URL/upload, uploaded avatar; disables old categories while preserving destinations and event history |
+| `migrations/0005_notifications.sql` | Browser push subscriptions and device preferences |
 
 Wrangler tracks applied migrations. `npm run db:local` and `npm run db:remote` apply only pending migrations in their respective databases. **Existing records are retained.** Keep a D1 backup before upgrading a production database.
 
@@ -184,6 +183,8 @@ migrations/          Ordered D1 migrations
   0001_init.sql
   0002_public_identity.sql
   0003_button_icons.sql
+  0004_profile_header.sql
+  0005_notifications.sql
 tests/               Node.js integration, unit and frontend tests
 wrangler.jsonc       Worker routing, static asset and D1 bindings
 package.json         npm commands and development dependencies
@@ -274,3 +275,16 @@ Paste each value at Wrangler's prompt. Never commit `.dev.vars` or private VAPID
 ### Troubleshooting
 
 If you see a D1 table error after upgrading, run the correct migration (`npm run db:local` for local development or `npm run db:remote` for production) **before launching the new Worker**. For missing push notifications, check the real HTTPS deployment, VAPID configuration, Android permissions and **Send test**. If you rotate VAPID keys, re-enable push on every device.
+
+### v0.5.1: push delivery troubleshooting
+
+The previous build sent browser push requests using `redirect: "error"`, which is not supported by Cloudflare Workers. v0.5.1 uses `redirect: "manual"` so push requests can reach the browser's push service. No VAPID rotation and no new D1 migration are necessary.
+
+1. Deploy this update with `npm run deploy`. Confirm the Worker is updated, then open the installed LinkHub Admin PWA on Android at `/admn`.
+2. Go to **Notifications**, confirm notifications are enabled on your phone, and press **Send test**. The endpoint must be registered, Android notification permission must be granted, and your device must have connectivity.
+3. A successful test means **accepted by the push service**, not guaranteed delivery to Android. If it is accepted but unseen, check Android Settings → Apps → LinkHub Admin (or Chrome) → Notifications, any browser-site permissions, and battery/background restrictions.
+4. HTTP **401/403** from the push service: check that the three production secrets `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, and `VAPID_SUBJECT` match your existing key pair, and that the subject contains a valid contact address. Do not expose the private key in logs or GitHub.
+5. HTTP **404/410**: the stored browser push endpoint expired; use **Enable notifications** again on the Android device to register a fresh subscription. Other statuses are shown in the admin toast.
+6. For more detail, use `npx wrangler tail` during a test. Server logs include HTTP status codes but never expose the browser endpoint or private keys.
+
+The **Menu** burger in the mobile dashboard is sticky. It remains at the top during scrolling, opens a vertical workspace list, and closes when you tap outside it, choose a section, or press Escape.

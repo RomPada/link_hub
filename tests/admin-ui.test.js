@@ -50,3 +50,19 @@ test('Appearance has no duplicate public-page button and full-width panel CSS',(
   assert.doesNotMatch(markup,/<a class="btn btn-outline" href="\/"/);
   assert.match(styles,/\.appearance-panel\s*\{\s*width:100%;max-width:none/);
 });
+
+test('mobile navigation uses a sticky burger menu, with outside-click and Escape dismissal',()=>{
+  const admin=loadFunction('adminShell','metricCard',{
+    state:{tab:'overview',adminLang:'en'},
+    tabs:[['overview','Overview','▦'],['notifications','Notifications','♧']],
+    escapeHTML,adminText:value=>value,chevronSvg:'<svg/>',globeSvg:'<svg/>',
+  });
+  const markup=admin('<p>Dashboard</p>');
+  assert.match(markup,/id="mobile-nav-toggle"/);
+  assert.match(markup,/class="mobile-burger-icon"/);
+  assert.match(markup,/aria-controls="dashboard-navigation"/);
+  assert.match(styles,/\.sidebar\{[\s\S]*?position:sticky!important;top:0!important/);
+  assert.match(source,/function dismissMobileNavigation\(/);
+  assert.match(source,/document\.addEventListener\('pointerdown'/);
+  assert.match(source,/event\.key==='Escape'/);
+});

@@ -1,5 +1,19 @@
 # LinkHub · Release Notes
 
+## v0.5.1 — Reliable Web Push requests and sticky mobile navigation
+
+- Fixed Web Push submission on Cloudflare Workers by replacing the unsupported `redirect: "error"` setting with `redirect: "manual"`.
+- Added actionable push-service HTTP status messages. Failed test requests no longer consume the 30-second test cooldown.
+- Reset event-push throttles after unsuccessful sends to avoid silently dropping later alerts.
+- Rebuilt mobile admin navigation as a full-width, sticky header with an accessible burger menu that remains available during scrolling.
+- Added outside-tap and Escape dismissal, plus a clear menu-open indicator.
+- No D1 migration or VAPID key rotation is required.
+
+**Commit:** `fix: repair Cloudflare Web Push and sticky mobile menu`  
+**Tag:** `v0.5.1`
+
+---
+
 ## v0.5.0 — Installable admin PWA and push notifications
 
 - Added a separately installable `/admn` PWA manifest with standalone admin start URL and a push-capable service worker.

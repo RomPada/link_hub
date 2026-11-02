@@ -93,6 +93,8 @@ export async function sendWebPush(subscription, payload, config, fetchFn = fetch
       Urgency: 'normal',
     },
     body: encrypted,
-    redirect: 'error',
+    // Cloudflare Workers accepts only 'follow' and 'manual'. Do not follow
+    // redirects to any other host: the VAPID JWT is scoped to this origin.
+    redirect: 'manual',
   });
 }

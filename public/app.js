@@ -168,17 +168,17 @@ function adminShell(content) {
     <aside class="sidebar">
       <div class="sidebar-brand"><div class="sidebar-brand-icon">↗</div><div><strong>LinkHub</strong><span>PERSONAL CONTROL CENTER</span></div></div>
       <div class="sidebar-label">WORKSPACE</div>
-      <button type="button" class="mobile-section-switch" id="mobile-nav-toggle" aria-expanded="false" aria-controls="dashboard-navigation" aria-label="Choose dashboard section"><span class="mobile-switch-current">${escapeHTML(adminText(tabs.find(([id])=>id===selected)[1],state.adminLang))}</span><span class="mobile-menu-chevron">${chevronSvg}</span></button>
+      <button type="button" class="mobile-section-switch" id="mobile-nav-toggle" aria-expanded="false" aria-controls="dashboard-navigation" aria-label="Open navigation menu"><span class="mobile-burger-icon" aria-hidden="true"><i></i><i></i><i></i></span><span class="mobile-switch-text"><span class="mobile-switch-title">${state.adminLang==='uk'?'Меню':'Menu'}</span><span class="mobile-switch-current">${escapeHTML(adminText(tabs.find(([id])=>id===selected)[1],state.adminLang))}</span></span></button>
       <nav id="dashboard-navigation" aria-label="Dashboard navigation" class="sidebar-nav">${tabs.map(([id, title, icon]) => `<button class="nav-item${id === selected ? ' nav-active' : ''}" data-tab="${id}"><span class="nav-item-icon">${icon}</span>${title}</button>`).join('')}</nav>
       <div class="sidebar-spacer"></div>
       <a class="sidebar-visit" href="/" target="_blank" rel="noopener">View public page <span>↗</span></a>
       <button class="sidebar-logout" id="sign-out">Sign out <span>→</span></button>
-      <div class="sidebar-version">LINKHUB · v0.5.0</div>
+      <div class="sidebar-version">LINKHUB · v0.5.1</div>
     </aside>
     <div class="dash-main">
       <header class="dash-topbar"><div class="dash-topbar-title">LINKHUB / <span>${escapeHTML(adminText(tabs.find((tab) => tab[0] === selected)[1],state.adminLang).toUpperCase())}</span></div><div class="dash-topbar-right"><div class="admin-language-menu language-menu"><button type="button" class="language-toggle" id="admin-language-toggle" aria-expanded="false" aria-haspopup="listbox" aria-label="Dashboard language"><span class="language-globe" aria-hidden="true">${globeSvg}</span><span>${state.adminLang==='uk'?'Українська':'English'}</span><span class="language-chevron" aria-hidden="true">${chevronSvg}</span></button><div class="language-options" id="admin-language-options" role="listbox" aria-label="Dashboard language" hidden>${[['en','English'],['uk','Українська']].map(([lang,label])=>`<button type="button" class="language-option${state.adminLang===lang?' selected':''}" role="option" aria-selected="${state.adminLang===lang}" data-admin-language="${lang}"><span>${label}</span>${state.adminLang===lang?'<span aria-hidden="true">✓</span>':''}</button>`).join('')}</div></div><span class="pill-live"><i></i> LIVE</span></div></header>
       <div class="dashboard-content">${content}</div>
-      <footer class="dash-footer">LinkHub v0.5.0 <span>·</span> Cloudflare Workers + D1 <span>·</span> Your data, your links.</footer>
+      <footer class="dash-footer">LinkHub v0.5.1 <span>·</span> Cloudflare Workers + D1 <span>·</span> Your data, your links.</footer>
     </div>
   </div>`;
 }
@@ -712,6 +712,7 @@ function wireAdmin() {
     const next=!sidebar.classList.contains('mobile-nav-open');
     sidebar.classList.toggle('mobile-nav-open',next);
     mobileToggle.setAttribute('aria-expanded',String(next));
+    mobileToggle.setAttribute('aria-label',next?'Close navigation menu':'Open navigation menu');
   });
   qsa('[data-tab]').forEach((el)=>el.onclick=()=>{state.tab=el.dataset.tab;renderAdmin();window.scrollTo(0,0);});
 
@@ -761,14 +762,22 @@ function wireAdmin() {
   });
 }
 
-if (adminMode) document.addEventListener('keydown',event=>{
-  if(event.key==='Escape') {
-    const navigation=qs('.sidebar');
-    if(navigation?.classList.contains('mobile-nav-open')) {
-      navigation.classList.remove('mobile-nav-open');
-      qs('#mobile-nav-toggle')?.setAttribute('aria-expanded','false');
-      qs('#mobile-nav-toggle')?.focus();
-    }
-  }
-});
+function dismissMobileNavigation({restoreFocus=false}={}) {
+  const navigation=qs('.sidebar');
+  if (!navigation?.classList.contains('mobile-nav-open')) return;
+  navigation.classList.remove('mobile-nav-open');
+  const button=qs('#mobile-nav-toggle');
+  button?.setAttribute('aria-expanded','false');
+  button?.setAttribute('aria-label','Open navigation menu');
+  if (restoreFocus) button?.focus();
+}
+if (adminMode) {
+  document.addEventListener('keydown',event=>{
+    if(event.key==='Escape') dismissMobileNavigation({restoreFocus:true});
+  });
+  document.addEventListener('pointerdown',event=>{
+    const sidebar=qs('.sidebar');
+    if(sidebar && !sidebar.contains(event.target)) dismissMobileNavigation();
+  });
+}
 if (adminMode) loadAdmin(); else renderPublic();
