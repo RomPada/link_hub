@@ -1,5 +1,20 @@
 # LinkHub · Release Notes
 
+## v0.5.0 — Installable admin PWA and push notifications
+
+- Added a separately installable `/admn` PWA manifest with standalone admin start URL and a push-capable service worker.
+- Added a Notifications workspace in the private dashboard for mobile and desktop.
+- Implemented authenticated device subscriptions, individual settings, mute/remove/test controls and alerts for views, unique visitors and outbound clicks.
+- Added source filtering and configurable minimum alert intervals; delivery failures do not interrupt analytics.
+- Implemented encrypted Web Push (RFC 8291) and signed VAPID requests (RFC 8292) using WebCrypto without dependencies, with push-host allowlisting.
+- Replaced the horizontal mobile navigation scroller with a collapsible section dropdown.
+- Added D1 migration `0005_notifications.sql`, VAPID key generator, automated tests and setup instructions.
+
+**Commit:** `feat: add admin PWA and configurable push notifications`  
+**Tag:** `v0.5.0`
+
+---
+
 ## v0.4.0 — Social profile header and unified destination list
 
 - Changed the private login URL to `/admn`; the previous `/admin` URL now returns 404 and is not tracked.

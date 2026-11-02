@@ -3,7 +3,13 @@ import { getAdminLanguage, translateAdmin, adminText } from './admin-uk.js';
 /** LinkHub browser client — plain JavaScript, no framework or build step. */
 const app = document.getElementById('app');
 const adminMode = location.pathname.replace(/\/$/, '') === '/admn';
-const state = { adminLang: getAdminLanguage(), publicLang: storedPublicLanguage(), tab: 'overview', period: 'week', overview: null, profile: null, sources: [], buttons: [], busy: false, modal: null };
+let deferredInstall = null;
+if (typeof window !== 'undefined') {
+  if (adminMode && 'serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js', {scope:'/'}).catch(console.warn);
+  window.addEventListener('beforeinstallprompt', event => { if (!adminMode) return; event.preventDefault(); deferredInstall = event; document.getElementById('install-admin')?.removeAttribute('disabled'); });
+  window.addEventListener('appinstalled', () => { deferredInstall = null; if (state.tab==='notifications') renderAdmin(); });
+}
+const state = { notifications: null, pushDevice: null, adminLang: getAdminLanguage(), publicLang: storedPublicLanguage(), tab: 'overview', period: 'week', overview: null, profile: null, sources: [], buttons: [], busy: false, modal: null };
 
 const palette = [
   ['#e9eefc', 'Icy blue'], ['#f9e8e7', 'Soft coral'], ['#f9edd7', 'Honey'],
@@ -155,23 +161,24 @@ async function renderPublic() {
   }
 }
 
-const tabs = [ ['overview', 'Overview', '▦'], ['links', 'My links', '↗'], ['sources', 'Traffic sources', '◉'], ['appearance', 'Appearance', '✳'] ];
+const tabs = [ ['overview', 'Overview', '▦'], ['links', 'My links', '↗'], ['sources', 'Traffic sources', '◉'], ['appearance', 'Appearance', '✳'], ['notifications', 'Notifications', '♧'] ];
 function adminShell(content) {
   const selected = state.tab;
   return `<div class="dashboard-shell">
     <aside class="sidebar">
       <div class="sidebar-brand"><div class="sidebar-brand-icon">↗</div><div><strong>LinkHub</strong><span>PERSONAL CONTROL CENTER</span></div></div>
       <div class="sidebar-label">WORKSPACE</div>
-      <nav aria-label="Dashboard navigation" class="sidebar-nav">${tabs.map(([id, title, icon]) => `<button class="nav-item${id === selected ? ' nav-active' : ''}" data-tab="${id}"><span class="nav-item-icon">${icon}</span>${title}</button>`).join('')}</nav>
+      <button type="button" class="mobile-section-switch" id="mobile-nav-toggle" aria-expanded="false" aria-controls="dashboard-navigation" aria-label="Choose dashboard section"><span class="mobile-switch-current">${escapeHTML(adminText(tabs.find(([id])=>id===selected)[1],state.adminLang))}</span><span class="mobile-menu-chevron">${chevronSvg}</span></button>
+      <nav id="dashboard-navigation" aria-label="Dashboard navigation" class="sidebar-nav">${tabs.map(([id, title, icon]) => `<button class="nav-item${id === selected ? ' nav-active' : ''}" data-tab="${id}"><span class="nav-item-icon">${icon}</span>${title}</button>`).join('')}</nav>
       <div class="sidebar-spacer"></div>
       <a class="sidebar-visit" href="/" target="_blank" rel="noopener">View public page <span>↗</span></a>
       <button class="sidebar-logout" id="sign-out">Sign out <span>→</span></button>
-      <div class="sidebar-version">LINKHUB · v0.4.0</div>
+      <div class="sidebar-version">LINKHUB · v0.5.0</div>
     </aside>
     <div class="dash-main">
       <header class="dash-topbar"><div class="dash-topbar-title">LINKHUB / <span>${escapeHTML(adminText(tabs.find((tab) => tab[0] === selected)[1],state.adminLang).toUpperCase())}</span></div><div class="dash-topbar-right"><div class="admin-language-menu language-menu"><button type="button" class="language-toggle" id="admin-language-toggle" aria-expanded="false" aria-haspopup="listbox" aria-label="Dashboard language"><span class="language-globe" aria-hidden="true">${globeSvg}</span><span>${state.adminLang==='uk'?'Українська':'English'}</span><span class="language-chevron" aria-hidden="true">${chevronSvg}</span></button><div class="language-options" id="admin-language-options" role="listbox" aria-label="Dashboard language" hidden>${[['en','English'],['uk','Українська']].map(([lang,label])=>`<button type="button" class="language-option${state.adminLang===lang?' selected':''}" role="option" aria-selected="${state.adminLang===lang}" data-admin-language="${lang}"><span>${label}</span>${state.adminLang===lang?'<span aria-hidden="true">✓</span>':''}</button>`).join('')}</div></div><span class="pill-live"><i></i> LIVE</span></div></header>
       <div class="dashboard-content">${content}</div>
-      <footer class="dash-footer">LinkHub v0.4.0 <span>·</span> Cloudflare Workers + D1 <span>·</span> Your data, your links.</footer>
+      <footer class="dash-footer">LinkHub v0.5.0 <span>·</span> Cloudflare Workers + D1 <span>·</span> Your data, your links.</footer>
     </div>
   </div>`;
 }
@@ -303,12 +310,98 @@ function appearanceTab() {
       <div class="form-row"><label>Accent color<input name="accent_color" type="color" value="${attr(item.accent_color || '#4267e9')}" /></label><p class="appearance-tip">Used for highlights, link arrows, focus indicators and interactive details.</p></div>
       <div class="form-bottom"><button class="btn btn-primary" type="submit">Save appearance</button></div></form></section>`;
 }
+function deviceChoice() {
+  return state.notifications?.devices?.find(device => device.endpoint_hash === state.pushDevice) || state.notifications?.devices?.[0] || null;
+}
+function notificationsTab() {
+  const info=state.notifications;
+  const connected=info?.devices || [];
+  const current=deviceChoice();
+  const installed=window.matchMedia('(display-mode: standalone)').matches || Boolean(navigator.standalone);
+  const supported=Boolean(window.isSecureContext && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window);
+  const options = state.sources.map(source=>`<option value="${source.id}" ${String(current?.source_filter)===String(source.id)?'selected':''}>${escapeHTML(source.name)}</option>`).join('');
+  return `<section class="page-heading"><div><div class="eyebrow">YOUR LINKHUB ALERTS</div><h1>Notifications</h1><p>Install your dashboard and choose which visits or clicks reach your device.</p></div></section>
+  <div class="notifications-layout">
+    <section class="dash-panel notification-intro"><div class="panel-title-row"><div><h2>Install on your phone</h2><p>Open this page in Chrome on Android, then install the standalone admin app.</p></div><span class="notify-icon">↗</span></div>
+      <div class="install-state"><span class="notify-status-indicator ${installed?'connected':''}"></span>${installed?'Admin app is installed / running standalone':'Browser mode · install the app for quick access'}</div>
+      <div class="notification-actions"><button class="btn btn-primary" type="button" id="install-admin" ${installed?'disabled':''}>${installed?'App installed':'Install admin app'}</button></div>
+      <p class="notification-hint">If the install prompt is unavailable: open the browser menu (⋮) and choose <strong>Install app</strong> or <strong>Add to Home screen</strong>. Your app opens at <code>/admn</code>. No separate Android APK is needed.</p>
+    </section>
+    <section class="dash-panel notification-intro"><div class="panel-title-row"><div><h2>Push on this device</h2><p>Subscribe this browser to receive notifications, even when the page is closed.</p></div><span class="notify-icon">◎</span></div>
+      <div class="install-state"><span class="notify-status-indicator ${typeof Notification !== 'undefined' && Notification.permission==='granted'?'connected':''}"></span>${supported ? `Permission: ${Notification.permission}`:'Web Push unavailable in this browser or insecure context'}</div>
+      <div class="notification-actions"><button class="btn btn-primary" type="button" id="enable-push" ${!supported || !info?.available?'disabled':''}>Enable notifications</button><span class="notification-muted">${info?.available?'Your device controls when alerts arrive.':'Add VAPID keys to enable push delivery.'}</span></div>
+      <p class="notification-hint">Only signed-in administrators can register devices. Visitors to your public page will never see a notification prompt.</p>
+    </section>
+  </div>
+  <section class="dash-panel notification-settings"><div class="panel-title-row"><div><h2>Notification preferences</h2><p>Choose a registered device and what it should receive.</p></div><span class="panel-detail">${connected.length} / 8 DEVICES</span></div>
+    ${current ? `<form id="notifications-form" class="notification-form">
+      <label class="notification-field">Device <select id="push-device" aria-label="Registered device">${connected.map(row=>`<option value="${attr(row.endpoint_hash)}" ${row.endpoint_hash===current.endpoint_hash?'selected':''}>${escapeHTML(row.device_name)}</option>`).join('')}</select></label>
+      <label class="notification-field">Device name <input id="push-device-name" maxlength="48" value="${attr(current.device_name)}" required /></label>
+      <div class="notification-toggle-stack">
+        <label class="notification-toggle"><input type="checkbox" id="push-enabled" ${current.enabled?'checked':''}/><span><strong>Enable alerts</strong><small>Temporarily mute or resume this device.</small></span></label>
+        <label class="notification-toggle"><input type="checkbox" id="push-unique" ${current.notify_unique?'checked':''}/><span><strong>New unique visitors</strong><small>First recorded page visit by an anonymous visitor ID.</small></span></label>
+        <label class="notification-toggle"><input type="checkbox" id="push-outbound" ${current.notify_outbound?'checked':''}/><span><strong>Outbound button clicks</strong><small>When someone opens one of your destination links.</small></span></label>
+        <label class="notification-toggle"><input type="checkbox" id="push-views" ${current.notify_views?'checked':''}/><span><strong>All other page visits</strong><small>Including returning visitors; can generate many alerts.</small></span></label>
+      </div>
+      <div class="notification-grid">
+        <label class="notification-field">Traffic source <select id="push-source"><option value="all">All sources</option>${options}</select></label>
+        <label class="notification-field">Minimum interval <select id="push-cooldown">${[[0,'Every eligible event'],[60,'1 minute'],[300,'5 minutes'],[900,'15 minutes']].map(([n,label])=>`<option value="${n}" ${Number(current.cooldown_seconds)===n?'selected':''}>${label}</option>`).join('')}</select></label>
+      </div>
+      <div class="notification-actions"><button type="submit" class="btn btn-primary">Save preferences</button><button type="button" id="test-push" class="btn btn-outline">Send test</button><button type="button" id="remove-push" class="btn btn-danger">Remove device</button></div>
+    </form>` : `<div class="notification-empty">${info ? 'No devices subscribed yet. Tap Enable notifications on your Android phone.' : 'Loading notification settings…'}</div>`}
+    <p class="notification-hint">Delivery depends on your browser, network and Android notification settings. The interval is a throttle, not a digest; skipped alerts are not queued. The public site and click tracking work normally when push is disabled.</p>
+  </section>`;
+}
+async function loadNotificationState() {
+  try {
+    state.notifications = await api('/api/admin/notifications/status');
+    if (!state.notifications.devices.find(d=>d.endpoint_hash===state.pushDevice)) state.pushDevice=state.notifications.devices[0]?.endpoint_hash || null;
+    if (state.tab==='notifications') renderAdmin();
+  } catch(error) { toast(error.message,'error'); }
+}
+function bytesFromBase64Url(value) {
+  const normalized = value.replace(/-/g,'+').replace(/_/g,'/');
+  return Uint8Array.from(atob(normalized+'='.repeat((4-normalized.length%4)%4)), c=>c.charCodeAt(0));
+}
+async function enableThisDevice() {
+  if (!state.notifications?.available) throw new Error('VAPID keys are not configured on the Worker.');
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) throw new Error('This browser does not support Web Push');
+  const permission = await Notification.requestPermission();
+  if (permission!=='granted') throw new Error('Notifications are blocked. Enable permission in Android app settings.');
+  const registration = await navigator.serviceWorker.register('/sw.js',{scope:'/'});
+  await navigator.serviceWorker.ready;
+  let subscription = await registration.pushManager.getSubscription();
+  if (subscription) {
+    const currentKey=subscription.options.applicationServerKey;
+    const expected=bytesFromBase64Url(state.notifications.publicKey);
+    const actual=currentKey?new Uint8Array(currentKey):new Uint8Array();
+    if (actual.length!==expected.length || actual.some((v,i)=>v!==expected[i])) { await subscription.unsubscribe(); subscription=null; }
+  }
+  if (!subscription) subscription = await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:bytesFromBase64Url(state.notifications.publicKey)});
+  const response=await api('/api/admin/notifications/subscribe',{method:'POST',data:{...subscription.toJSON(),device_name:'My Android device'}});
+  state.pushDevice=response.endpoint_hash;
+  await loadNotificationState();
+}
+async function removeDevice(hash) {
+  const reg = await navigator.serviceWorker?.getRegistration('/');
+  const own = await reg?.pushManager?.getSubscription();
+  // Remove the server record first. Other devices stay connected.
+  await api('/api/admin/notifications/device',{method:'DELETE',data:{endpoint_hash:hash}});
+  if (own) {
+    const buffer = await crypto.subtle.digest('SHA-256',new TextEncoder().encode(own.endpoint));
+    const computed = [...new Uint8Array(buffer)].map(b=>b.toString(16).padStart(2,'0')).join('');
+    if (computed===hash) await own.unsubscribe();
+  }
+  state.pushDevice=null;
+  await loadNotificationState();
+}
 function renderAdmin() {
   document.documentElement.lang=state.adminLang==='uk'?'uk':'en';
-  const content = state.tab === 'overview' ? overview() : state.tab === 'links' ? linksTab() : state.tab === 'sources' ? sourceTab() : appearanceTab();
+  const content = state.tab === 'overview' ? overview() : state.tab === 'links' ? linksTab() : state.tab === 'sources' ? sourceTab() : state.tab === 'appearance' ? appearanceTab() : notificationsTab();
   app.innerHTML = adminShell(content);
   wireAdmin();
   translateAdmin(app, state.adminLang);
+  if (state.tab==='notifications' && !state.notifications) void loadNotificationState();
 }
 function loginView(configured) {
   document.title = 'Sign in · LinkHub';
@@ -508,6 +601,50 @@ function updateAvatarPreview() {
   }
   const namePreview=qs('.profile-name-preview');if(namePreview)namePreview.textContent=name;
 }
+function wireNotifications() {
+  const install=qs('#install-admin');
+  install?.addEventListener('click',async()=>{
+    if (deferredInstall) {
+      const prompt=deferredInstall;deferredInstall=null;
+      await prompt.prompt();
+      const answer=await prompt.userChoice;
+      if(answer?.outcome==='accepted')toast('App installation requested');
+    } else toast('Open Chrome menu (⋮) → Install app / Add to Home screen.','error');
+  });
+  qs('#enable-push')?.addEventListener('click',async event=>{
+    event.currentTarget.disabled=true;
+    try{await enableThisDevice();toast('Push notifications enabled on this device');}
+    catch(error){toast(error.message,'error');event.currentTarget.disabled=false;}
+  });
+  qs('#push-device')?.addEventListener('change',event=>{state.pushDevice=event.target.value;renderAdmin();});
+  qs('#notifications-form')?.addEventListener('submit',async event=>{
+    event.preventDefault();
+    const form=event.currentTarget;const save=form.querySelector('[type="submit"]');save.disabled=true;
+    try {
+      await api('/api/admin/notifications/preferences',{method:'PUT',data:{
+        endpoint_hash:deviceChoice().endpoint_hash,
+        device_name:qs('#push-device-name').value,
+        enabled:qs('#push-enabled').checked,
+        notify_unique:qs('#push-unique').checked,
+        notify_outbound:qs('#push-outbound').checked,
+        notify_views:qs('#push-views').checked,
+        source_filter:qs('#push-source').value,
+        cooldown_seconds:Number(qs('#push-cooldown').value),
+      }});
+      toast('Notification preferences saved');await loadNotificationState();
+    }catch(error){toast(error.message,'error');save.disabled=false;}
+  });
+  qs('#test-push')?.addEventListener('click',async event=>{
+    event.currentTarget.disabled=true;
+    try {await api('/api/admin/notifications/test',{method:'POST',data:{endpoint_hash:deviceChoice().endpoint_hash}});toast('Push accepted by browser service');}
+    catch(error){toast(error.message,'error');}finally{if(event.currentTarget.isConnected)event.currentTarget.disabled=false;}
+  });
+  qs('#remove-push')?.addEventListener('click',async()=>{
+    const selected=deviceChoice();if(!selected)return;
+    if(!window.confirm(`Remove push notifications for ${selected.device_name}?`))return;
+    try{await removeDevice(selected.endpoint_hash);toast('Device removed');}catch(error){toast(error.message,'error');}
+  });
+}
 function wireAdmin() {
   const adminToggle=qs('#admin-language-toggle'),adminOptions=qs('#admin-language-options');
   const closeAdminLanguage=()=>{if(!adminOptions)return;adminOptions.hidden=true;adminToggle?.setAttribute('aria-expanded','false');};
@@ -569,7 +706,16 @@ function wireAdmin() {
     qs(selector)?.addEventListener('input', updateAvatarPreview);
     qs(selector)?.addEventListener('change', updateAvatarPreview);
   }
+  const mobileToggle=qs('#mobile-nav-toggle');
+  mobileToggle?.addEventListener('click',()=>{
+    const sidebar=mobileToggle.closest('.sidebar');
+    const next=!sidebar.classList.contains('mobile-nav-open');
+    sidebar.classList.toggle('mobile-nav-open',next);
+    mobileToggle.setAttribute('aria-expanded',String(next));
+  });
   qsa('[data-tab]').forEach((el)=>el.onclick=()=>{state.tab=el.dataset.tab;renderAdmin();window.scrollTo(0,0);});
+
+  if(state.tab==='notifications') wireNotifications();
   qsa('[data-metric]').forEach((el)=>el.onclick=()=>void metricDetails(el.dataset.metric));
   qsa('[data-period]').forEach((el)=>el.onclick=async()=>{
     state.period=el.dataset.period;
@@ -615,4 +761,14 @@ function wireAdmin() {
   });
 }
 
+if (adminMode) document.addEventListener('keydown',event=>{
+  if(event.key==='Escape') {
+    const navigation=qs('.sidebar');
+    if(navigation?.classList.contains('mobile-nav-open')) {
+      navigation.classList.remove('mobile-nav-open');
+      qs('#mobile-nav-toggle')?.setAttribute('aria-expanded','false');
+      qs('#mobile-nav-toggle')?.focus();
+    }
+  }
+});
 if (adminMode) loadAdmin(); else renderPublic();

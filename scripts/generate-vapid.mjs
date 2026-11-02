@@ -1,0 +1,10 @@
+import { webcrypto } from 'node:crypto';
+const { subtle } = webcrypto;
+const keys = await subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign','verify']);
+const publicKey = new Uint8Array(await subtle.exportKey('raw', keys.publicKey));
+const privateKey = (await subtle.exportKey('jwk', keys.privateKey)).d;
+const encode = bytes => Buffer.from(bytes).toString('base64url');
+console.log('Generate this pair only once. Replacing the keys invalidates existing device subscriptions.');
+console.log(`VAPID_PUBLIC_KEY=${encode(publicKey)}`);
+console.log(`VAPID_PRIVATE_KEY=${privateKey}`);
+console.log('Set VAPID_SUBJECT=mailto:your-real-contact@example.com (replace with your real address)');

@@ -2,6 +2,7 @@
 const lexicon = {
   'View details':'Переглянути деталі',
   'ACTIONS':'ДІЇ','Delete event':'Видалити подію','Delete analytics record?':'Видалити запис аналітики?','Analytics record deleted':'Запис аналітики видалено','Choose file':'Обрати файл','No file selected':'Файл не вибрано','Analytics period':'Період аналітики',
+  'Notifications':'Сповіщення',
   'Overview':'Огляд','My links':'Мої посилання','Traffic sources':'Джерела трафіку','Appearance':'Оформлення',
   'WORKSPACE':'РОБОЧИЙ ПРОСТІР','PERSONAL CONTROL CENTER':'ПАНЕЛЬ КЕРУВАННЯ','View public page':'Переглянути публічну сторінку','Sign out':'Вийти',
   'Open page':'Відкрити сторінку','LIVE':'ОНЛАЙН','A CLEARER PICTURE OF YOUR TRAFFIC':'АНАЛІТИКА ТВОГО ТРАФІКУ',
@@ -145,3 +146,41 @@ export function translateAdmin(root, language) {
     }
   });
 }
+
+Object.assign(lexicon, {
+  'YOUR LINKHUB ALERTS':'СПОВІЩЕННЯ LINKHUB',
+  'Install on your phone':'Встановити на телефон',
+  'Open this page in Chrome on Android, then install the standalone admin app.':'Відкрий цю сторінку в Chrome на Android і встанови адмінку як застосунок.',
+  'App installed':'Застосунок встановлено',
+  'Install admin app':'Встановити адмінку',
+  'Admin app is installed / running standalone':'Адмінка відкрита як застосунок',
+  'Browser mode · install the app for quick access':'Режим браузера · встанови застосунок для швидкого доступу',
+  'Push on this device':'Push на цьому пристрої',
+  'Subscribe this browser to receive notifications, even when the page is closed.':'Підпиши цей браузер на сповіщення, навіть коли сторінка закрита.',
+  'Enable notifications':'Увімкнути сповіщення',
+  'Your device controls when alerts arrive.':'Час доставки також залежить від налаштувань пристрою.',
+  'Add VAPID keys to enable push delivery.':'Додай VAPID-ключі, щоб увімкнути сповіщення.',
+  'Only signed-in administrators can register devices. Visitors to your public page will never see a notification prompt.':'Лише адміністратори можуть додавати пристрої. Відвідувачі публічної сторінки не отримають запитів на сповіщення.',
+  'Notification preferences':'Налаштування сповіщень',
+  'Choose a registered device and what it should receive.':'Обери пристрій і події, про які він має повідомляти.',
+  'Device':'Пристрій', 'Device name':'Назва пристрою',
+  'Enable alerts':'Увімкнути сповіщення',
+  'Temporarily mute or resume this device.':'Тимчасово вимкни або віднови сповіщення для цього пристрою.',
+  'New unique visitors':'Нові унікальні відвідувачі',
+  'First recorded page visit by an anonymous visitor ID.':'Перше зафіксоване відвідування нового анонімного браузера.',
+  'Outbound button clicks':'Кліки на зовнішні посилання',
+  'When someone opens one of your destination links.':'Коли користувач відкриває один із твоїх ресурсів.',
+  'All other page visits':'Інші відвідування сторінки',
+  'Including returning visitors; can generate many alerts.':'Включно з повторними відвідувачами; може бути багато повідомлень.',
+  'Traffic source':'Джерело трафіку',
+  'All sources':'Усі джерела',
+  'Minimum interval':'Мінімальний інтервал',
+  'Every eligible event':'Кожна відповідна подія',
+  '1 minute':'1 хвилина', '5 minutes':'5 хвилин', '15 minutes':'15 хвилин',
+  'Save preferences':'Зберегти налаштування',
+  'Send test':'Тестове сповіщення',
+  'Remove device':'Видалити пристрій',
+  'No devices subscribed yet. Tap Enable notifications on your Android phone.':'Ще немає підписаних пристроїв. Натисни «Увімкнути сповіщення» на телефоні.',
+  'Loading notification settings…':'Завантаження налаштувань…',
+  'Admin app opens at /admn.':'Адмінка відкривається за адресою /admn.'
+});

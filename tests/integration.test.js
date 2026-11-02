@@ -11,6 +11,7 @@ function makeD1() {
   sqlite.exec(readFileSync(new URL('../migrations/0002_public_identity.sql', import.meta.url), 'utf8'));
   sqlite.exec(readFileSync(new URL('../migrations/0003_button_icons.sql', import.meta.url), 'utf8'));
   sqlite.exec(readFileSync(new URL('../migrations/0004_profile_header.sql', import.meta.url), 'utf8'));
+  sqlite.exec(readFileSync(new URL('../migrations/0005_notifications.sql', import.meta.url), 'utf8'));
   function bindStatement(query, params) {
     const statement = sqlite.prepare(query);
     const values = params.map((value) => value === undefined ? null : value);

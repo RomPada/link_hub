@@ -1,4 +1,5 @@
-/** LinkHub v0.4.0 — one Cloudflare Worker + D1 + static assets.
+import { sendWebPush, validPushSubscription, decodeB64url } from "./web-push.js";
+/** LinkHub v0.5.0 — one Cloudflare Worker + D1 + static assets.
  * Analytics counts page visits and outbound button clicks separately.
  * No raw IP addresses or HTTP referrers are stored.
  */
@@ -8,7 +9,7 @@ const VISITOR_COOKIE = 'lh_visitor';
 const SOURCE_COOKIE = 'lh_source';
 const WEEK_MS = 7 * 86400000;
 const SESSION_TTL = WEEK_MS;
-const RESERVED = new Set(['admin', 'admn', 'api', 'out', 'button-icon', 'login', 'demo', 'go', 'favicon', 'manifest', 'icon', 'robots', 'index', 'assets', 'site-icon']);
+const RESERVED = new Set(['admin', 'admn', 'api', 'out', 'button-icon', 'login', 'demo', 'go', 'favicon', 'manifest', 'icon', 'robots', 'index', 'assets', 'site-icon','sw','notifications']);
 const NAV_BOTS = /bot|crawl|spider|slurp|preview|facebookexternalhit|twitterbot|telegrambot|discordbot|whatsapp|linkedinbot|pinterest|headless|lighthouse|google-inspectiontool/i;
 const VALID_SLUG = /^[a-z][a-z0-9_-]{0,39}$/;
 const COLOR_CHOICES = new Set(['#e9eefc','#f9e8e7','#f9edd7','#e4f0e9','#ede8f9','#e8f3f5','#f2ece6','#f5e9f1']);
@@ -188,10 +189,134 @@ async function logout(request, env) {
   response.headers.append('Set-Cookie', cookieHeader(SESSION_COOKIE, '', request, { maxAge: 0, sameSite: 'Strict' }));
   return response;
 }
+function pushConfig(env) {
+  const publicKey = String(env.VAPID_PUBLIC_KEY || '');
+  const privateKey = String(env.VAPID_PRIVATE_KEY || '');
+  const subject = String(env.VAPID_SUBJECT || '');
+  try {
+    if (decodeB64url(publicKey).length !== 65 || decodeB64url(privateKey).length !== 32 || !/^(mailto:|https:\/\/)/.test(subject)) return null;
+    return { publicKey, privateKey, subject };
+  } catch { return null; }
+}
+function validNotificationSettings(payload) {
+  if (!payload || typeof payload !== 'object') throw new Error('Invalid notification settings');
+  const sourceFilter = String(payload.source_filter || 'all');
+  const cooldown = Number(payload.cooldown_seconds);
+  if (sourceFilter !== 'all' && !/^[1-9]\d{0,9}$/.test(sourceFilter)) throw new Error('Invalid source filter');
+  if (![0,60,300,900].includes(cooldown)) throw new Error('Invalid notification interval');
+  return {
+    enabled: bool(payload.enabled), notify_views: bool(payload.notify_views),
+    notify_unique: bool(payload.notify_unique), notify_outbound: bool(payload.notify_outbound),
+    source_filter: sourceFilter, cooldown_seconds: cooldown,
+    device_name: text(payload.device_name, 48) || 'My Android device',
+  };
+}
+async function endpointHash(endpoint) { return sha256(endpoint); }
+async function notificationsApi(request, env, operation, method) {
+  const config = pushConfig(env);
+  if (operation === 'status' && method === 'GET') {
+    const stored = await env.DB.prepare('SELECT endpoint_hash,device_name,enabled,notify_views,notify_unique,notify_outbound,source_filter,cooldown_seconds,created_at FROM push_subscriptions ORDER BY created_at DESC LIMIT 10').all();
+    return json({ available: Boolean(config), publicKey: config?.publicKey || null, devices: stored.results });
+  }
+  if (!config) return fail('VAPID keys are not configured. See README.md.', 503);
+  if (operation === 'subscribe' && method === 'POST') {
+    const incoming = await bodyJson(request, 5000);
+    if (!validPushSubscription(incoming)) return fail('Browser push subscription is invalid or unsupported', 400);
+    const hash = await endpointHash(incoming.endpoint);
+    const count = await env.DB.prepare('SELECT COUNT(*) AS n FROM push_subscriptions').first();
+    const existing = await env.DB.prepare('SELECT endpoint_hash FROM push_subscriptions WHERE endpoint_hash=?').bind(hash).first();
+    if (!existing && Number(count?.n) >= 8) return fail('Maximum 8 subscribed devices. Remove an old device first.', 409);
+    const now = Date.now();
+    await env.DB.prepare(`INSERT INTO push_subscriptions (endpoint_hash,endpoint,p256dh,auth,device_name,created_at,updated_at)
+      VALUES (?,?,?,?,?,?,?) ON CONFLICT(endpoint_hash) DO UPDATE SET
+      endpoint=excluded.endpoint,p256dh=excluded.p256dh,auth=excluded.auth,updated_at=excluded.updated_at`)
+      .bind(hash,incoming.endpoint,incoming.keys.p256dh,incoming.keys.auth,text(incoming.device_name,48)||'My Android device',now,now).run();
+    return json({ ok: true, endpoint_hash: hash }, 201);
+  }
+  if (operation === 'preferences' && method === 'PUT') {
+    const data = await bodyJson(request, 4000);
+    if (!/^[0-9a-f]{64}$/.test(String(data.endpoint_hash || ''))) return fail('Invalid device ID');
+    const prefs = validNotificationSettings(data);
+    const result = await env.DB.prepare(`UPDATE push_subscriptions SET device_name=?,enabled=?,notify_views=?,notify_unique=?,notify_outbound=?,source_filter=?,cooldown_seconds=?,updated_at=? WHERE endpoint_hash=?`)
+      .bind(prefs.device_name,prefs.enabled,prefs.notify_views,prefs.notify_unique,prefs.notify_outbound,prefs.source_filter,prefs.cooldown_seconds,Date.now(),data.endpoint_hash).run();
+    if (!result.meta.changes) return fail('Device not found', 404);
+    return json({ ok:true });
+  }
+  if (operation === 'device' && method === 'DELETE') {
+    const data = await bodyJson(request, 2000);
+    if (!/^[0-9a-f]{64}$/.test(String(data.endpoint_hash || ''))) return fail('Invalid device ID');
+    const result = await env.DB.prepare('DELETE FROM push_subscriptions WHERE endpoint_hash=?').bind(data.endpoint_hash).run();
+    if (!result.meta.changes) return fail('Device not found',404);
+    return json({ ok:true });
+  }
+  if (operation === 'test' && method === 'POST') {
+    const data = await bodyJson(request, 2000);
+    const hash = String(data.endpoint_hash || '');
+    if (!/^[0-9a-f]{64}$/.test(hash)) return fail('Invalid device ID');
+    const now = Date.now();
+    const update = await env.DB.prepare('UPDATE push_subscriptions SET last_test_at=? WHERE endpoint_hash=? AND last_test_at < ?')
+      .bind(now,hash,now-30000).run();
+    if (!update.meta.changes) return fail('Test not available. Wait 30 seconds or check the device.',429);
+    const device = await env.DB.prepare('SELECT endpoint,p256dh,auth FROM push_subscriptions WHERE endpoint_hash=?').bind(hash).first();
+    if (!device) return fail('Device not found',404);
+    try {
+      const delivered = await sendWebPush({endpoint:device.endpoint, keys:{p256dh:device.p256dh,auth:device.auth}},
+        {title:'LinkHub · Test',body:'Push notifications are connected.',url:'/admn'},config);
+      await delivered.body?.cancel();
+      if (delivered.status === 404 || delivered.status === 410) {
+        await env.DB.prepare('DELETE FROM push_subscriptions WHERE endpoint_hash=?').bind(hash).run();
+        return fail('This subscription expired. Enable notifications again.',410);
+      }
+      if (!delivered.ok) return fail(`Push service rejected the request (${delivered.status}). Check VAPID keys.`,502);
+      return json({ ok:true, accepted:true });
+    } catch (error) { console.error('Push test failed',error); return fail('Could not contact the browser push service.',502); }
+  }
+  return fail('Unknown notification endpoint',404);
+}
+async function notifyForEvent(env, event) {
+  const config = pushConfig(env);
+  if (!config) return;
+  const subscriptions = await env.DB.prepare('SELECT * FROM push_subscriptions WHERE enabled=1 LIMIT 8').all();
+  if (!subscriptions.results.length) return;
+  let firstView = false;
+  if (event.kind === 'view' && subscriptions.results.some(s => s.notify_unique)) {
+    const result = await env.DB.prepare("SELECT COUNT(*) AS n FROM events WHERE kind='view' AND visitor_id=?")
+      .bind(event.visitorId).first();
+    firstView = Number(result?.n) === 1;
+  }
+  const deliveries = subscriptions.results.map(async sub => {
+    if (sub.source_filter !== 'all' && sub.source_filter !== String(event.sourceId ?? '')) return;
+    let title = '';
+    let body = '';
+    if (event.kind === 'view') {
+      if (firstView && sub.notify_unique) title = 'New visitor';
+      else if (sub.notify_views) title = 'New page visit';
+      else return;
+      body = `${event.sourceName} · ${event.country || 'Unknown country'}`;
+    } else if (event.kind === 'outbound' && sub.notify_outbound) {
+      title = 'Destination click';
+      body = `${event.buttonName} · via ${event.sourceName}`;
+    } else return;
+    const now = Date.now();
+    const result = await env.DB.prepare('UPDATE push_subscriptions SET last_sent_at=? WHERE endpoint_hash=? AND last_sent_at <= ? AND enabled=1')
+      .bind(now,sub.endpoint_hash,now-Number(sub.cooldown_seconds || 0)*1000).run();
+    if (!result.meta.changes) return;
+    try {
+      const push = await sendWebPush({endpoint:sub.endpoint,keys:{p256dh:sub.p256dh,auth:sub.auth}},
+        {title:`LinkHub · ${title}`, body, url:'/admn'},config);
+      await push.body?.cancel();
+      if ([404,410].includes(push.status)) await env.DB.prepare('DELETE FROM push_subscriptions WHERE endpoint_hash=?').bind(sub.endpoint_hash).run();
+      else if (!push.ok) console.warn('Push service declined notification',push.status);
+    } catch (error) { console.warn('Push delivery failed',error?.message || error); }
+  });
+  await Promise.allSettled(deliveries);
+}
 async function recordEvent(env, event) {
   await env.DB.prepare(`INSERT INTO events(kind,source_id,source_name,button_id,button_name,visitor_id,country,device,occurred_at)
     VALUES(?,?,?,?,?,?,?,?,?)`).bind(event.kind, event.sourceId, event.sourceName,
     event.buttonId, event.buttonName, event.visitorId, event.country, event.device, Date.now()).run();
+  // Push failures never interrupt tracking or block the visitor.
+  try { await notifyForEvent(env, event); } catch (error) { console.warn('Notification dispatch unavailable',error?.message || error); }
 }
 function scheduleRecord(ctx, env, event) { ctx.waitUntil(recordEvent(env, event).catch((error) => console.error('Event insert failed', error))); }
 async function landing(request, env, ctx, source = null, track = true) {
@@ -199,7 +324,11 @@ async function landing(request, env, ctx, source = null, track = true) {
     new Request(new URL("/", request.url), request),
   );
   if (!asset.ok) return new Response('index.html was not found', { status: 500 });
-  const response = noStore(new Response(request.method === 'HEAD' ? null : asset.body, { status: asset.status, headers: asset.headers }));
+  const pageBody = track || request.method === 'HEAD' ? asset.body
+    : (await asset.text()).replace('href="/manifest.webmanifest"', 'href="/admin.webmanifest"');
+  const pageHeaders = new Headers(asset.headers);
+  if (!track) { pageHeaders.delete('Content-Length'); pageHeaders.delete('ETag'); }
+  const response = noStore(new Response(request.method === 'HEAD' ? null : pageBody, { status: asset.status, headers: pageHeaders }));
   if (request.method === 'GET') {
     const visitor = visitorFrom(request);
     if (track) trackingCookies(response, request, visitor, source ? String(source.id) : '');
@@ -423,6 +552,11 @@ export default {
           if (!(await isAuthenticated(request,env))) return fail('Please sign in',401);
           return await reorderButtons(request,env);
         }
+        if (subpath.startsWith('notifications/')) {
+          if (method !== 'GET' && !apiOriginAllowed(request)) return fail('Invalid request origin',403);
+          if (!(await isAuthenticated(request,env))) return fail('Please sign in',401);
+          return await notificationsApi(request,env,subpath.slice('notifications/'.length),method);
+        }
         return await adminApi(request, env, subpath,method);
       }
       if (pathname.startsWith('/api/')) return fail('Endpoint not found',404);
@@ -439,7 +573,7 @@ export default {
       return await env.ASSETS.fetch(request);
     } catch (error) {
       console.error('LinkHub handler error:',error);
-      if (error?.message === 'Invalid JSON' || error?.message === 'Request is too large' || error?.message?.startsWith('Please enter') || error?.message?.startsWith('Use a name') || error?.message?.startsWith('Favicon') || error?.message?.startsWith('Invalid favicon') || error?.message?.startsWith('Use a PNG') || error?.message?.startsWith('Please enter a valid icon') || error?.message?.startsWith('Upload an icon') || error?.message?.startsWith('Avatar') || error?.message?.startsWith('Cover image') || error?.message?.startsWith('Invalid avatar') || error?.message?.startsWith('Invalid cover image')) return fail(error.message,400);
+      if (error?.message === 'Invalid JSON' || error?.message === 'Request is too large' || error?.message?.startsWith('Please enter') || error?.message?.startsWith('Use a name') || error?.message?.startsWith('Favicon') || error?.message?.startsWith('Invalid favicon') || error?.message?.startsWith('Use a PNG') || error?.message?.startsWith('Please enter a valid icon') || error?.message?.startsWith('Upload an icon') || error?.message?.startsWith('Avatar') || error?.message?.startsWith('Cover image') || error?.message?.startsWith('Invalid avatar') || error?.message?.startsWith('Invalid cover image') || error?.message?.startsWith('Invalid notification') || error?.message?.startsWith('Invalid source filter')) return fail(error.message,400);
       if (/UNIQUE constraint failed/i.test(error?.message || '')) return fail('This URL slug is already in use',409);
       return fail('Server error. Check Worker logs and D1 migrations.',500);
     }

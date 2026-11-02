@@ -2,7 +2,7 @@
 
 A self-hosted, single-profile link landing page with independent analytics for incoming visits and outbound destination clicks. Built on **Cloudflare Workers**, **Cloudflare D1**, and lightweight browser-native HTML/CSS/JavaScript.
 
-**Version:** 0.4.0 · **Runtime:** Cloudflare Workers · **Database:** D1 (SQLite) · **Default public language:** English
+**Version:** 0.5.0 · **Runtime:** Cloudflare Workers · **Database:** D1 (SQLite) · **Default public language:** English
 
 ## Overview
 
@@ -40,17 +40,20 @@ Source attribution reflects the entry URL used, not a verified upstream website.
 - Human-readable country names next to ISO country codes and keyboard-accessible admin language selector.
 - Source, destination, and country rankings, a 14-day chart (today first), and recent events.
 - English / Ukrainian admin interface; default English. The `/admn` login page is always English.
+- Installable **LinkHub Admin** PWA with its own `/admn` manifest and a service worker for browser push notifications.
+- Dedicated **Notifications** workspace: up to 8 subscribed administrator devices, test pushes, per-device enable/mute, page visits, new unique visitors and outbound clicks; source filters and 0/1/5/15-minute throttling.
+- Web Push uses VAPID and Web Crypto without a paid push service. No notification permission is requested from public visitors.
 
 **Appearance and layout**
 
 - The full-width Appearance form includes a social-profile preview and controls for cover image URL/upload/removal, avatar image URL/upload/removal, fallback letters, avatar shape, and accent color.
-- The public-page shortcut remains available in the sidebar, without a duplicate action inside Appearance.
+- The public-page shortcut remains available in the sidebar, without a duplicate action inside Appearance. Mobile navigation uses a dropdown instead of horizontally scrolling tabs.
 
 **Operational design**
 
 - No runtime dependency on third-party analytics products.
 - No React/Next.js build step; assets are deployed with one Worker.
-- D1 migration files are additive and applied using Wrangler. v0.4.0 adds an additive profile-header migration (0004_profile_header.sql).
+- D1 migration files are additive and applied using Wrangler. v0.5.0 adds a dedicated device-subscriptions migration (0005_notifications.sql).
 - Runs on Cloudflare Free plans within the platform's request and database limits. A `*.workers.dev` deployment doesn't require a purchased domain.
 
 ## Requirements
@@ -59,9 +62,11 @@ Source attribution reflects the entry URL used, not a verified upstream website.
 - npm, a Cloudflare account, and Wrangler (installed through `npm install`).
 - An existing D1 database for upgrades, or a new database for first installation.
 
-## Upgrade from v0.3.2
+## Upgrade from v0.4.0
 
-Keep the **same GitHub repository and Cloudflare D1 database**. Replace the application source, preserving the deployed `database_id` in `wrangler.jsonc` and any local `.dev.vars` secrets. Apply the database migrations **before** starting or deploying the new Worker:
+Use the existing GitHub repository, Worker and Cloudflare D1 database. Retain the actual `database_id` in `wrangler.jsonc` and **never overwrite `.dev.vars`** during the upgrade.
+
+Apply the new D1 migration **before starting the updated Worker**:
 
 ```bash
 npm install
@@ -70,14 +75,14 @@ npm run db:local
 npm run dev
 ```
 
-For production, apply the remote migration and then deploy:
+For your deployed site, apply the remote D1 migration **before deploying the new code**:
 
 ```bash
 npm run db:remote
 npm run deploy
 ```
 
-Wrangler applies only pending migrations. Existing visitor events, source routes and destination buttons are retained. The login is at `/admn`; `/admin` intentionally returns 404. Browser bookmarks to the old route should be updated. Profile-cover or uploaded-avatar files are limited to 256 KiB each; uploaded images are stored in D1.
+`migrations/0005_notifications.sql` adds device subscriptions without touching visits, destinations, profile or sessions. Push sending remains disabled until VAPID secrets are configured. All other features continue to work.
 
 ## Quick start: local development
 
@@ -108,6 +113,8 @@ On Windows PowerShell, use `Copy-Item .dev.vars.example .dev.vars` instead. Set 
 ```bash
 node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
 ```
+
+To enable push alerts, generate VAPID keys once and place them in `.dev.vars`, along with your existing admin secrets (instructions below).
 
 Then run:
 
@@ -140,6 +147,9 @@ npx wrangler secret put SESSION_SECRET
 ```
 
 Secrets persist across future deployments. They must not appear in GitHub. If production secrets were previously configured, do not rotate them unnecessarily.
+
+To enable push in production, also set `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT` using `npx wrangler secret put NAME`. Follow the Android installation section below.
+
 
 Wrangler prints the `*.workers.dev` address after deployment. Configure the profile, destination URLs, button icons and entry sources from `/admn`. For an existing installation, verify a sample visit and an outbound click after the migration.
 
@@ -207,3 +217,60 @@ The admin dashboard requires authentication. Passwords and session secrets are p
 ## Versioning
 
 This project uses Semantic Versioning and Conventional Commits. See [`PATCHLIST.md`](PATCHLIST.md) for release notes.
+
+## Android installation and Web Push
+
+The admin can be installed as a standalone Android PWA. Use a deployed HTTPS `*.workers.dev` address (or an HTTPS custom domain). Localhost supports service workers for desktop development, but a Codespaces preview/iframe is not a reliable Android push environment.
+
+### One-time VAPID setup
+
+Generate a key pair from the project root:
+
+```bash
+npm run vapid:generate
+```
+
+Store the resulting pair securely. Do not change it after registering devices: changing the public key invalidates existing subscriptions. Set a **real contact email** in `VAPID_SUBJECT`, formatted as `mailto:address@domain.com`.
+
+For local use, append the following **real values** to your existing `.dev.vars`:
+
+```dotenv
+VAPID_PUBLIC_KEY=<generated-public-key>
+VAPID_PRIVATE_KEY=<generated-private-key>
+VAPID_SUBJECT=mailto:<your-real-contact-email>
+```
+
+For the deployed Worker, configure the **same** credentials as secrets:
+
+```bash
+npx wrangler secret put VAPID_PUBLIC_KEY
+npx wrangler secret put VAPID_PRIVATE_KEY
+npx wrangler secret put VAPID_SUBJECT
+```
+
+Paste each value at Wrangler's prompt. Never commit `.dev.vars` or private VAPID keys into Git. `ADMIN_PASSWORD` and `SESSION_SECRET` remain unchanged. **Run `npm run db:local` / `npm run db:remote` before the new code as appropriate.**
+
+### Install on Android and enable alerts
+
+1. Open `https://<your-worker>.workers.dev/admn` in **Chrome for Android** and sign in.
+2. Open **Notifications** using the compact mobile section menu.
+3. Tap **Install admin app**, or use Chrome **⋮ → Install app** / **Add to Home screen** if there is no install prompt.
+4. Launch **LinkHub Admin** from the phone's home screen (start URL `/admn`).
+5. Visit **Notifications → Enable notifications** and grant Android/browser notification permission.
+6. Select the registered device, then choose **New unique visitors**, **Outbound button clicks**, **All other page visits**, a particular traffic source (or all), and the **minimum interval** between alerts. Save preferences.
+7. Tap **Send test**; check the Android notification tray. A push service accepting the message does not guarantee immediate delivery to the phone.
+
+### Behavior, security, and costs
+
+- Notifications are sent **after events are stored**; failed delivery does not interrupt link tracking or analytics.
+- New unique visitors are determined by a browser's anonymous visitor ID, not a verified individual.
+- The minimum interval suppresses notifications during the selected interval; suppressed events are **not queued** or summarized. An interval of zero can produce many notifications and increase D1/Worker usage.
+- Each device can be configured, muted, tested, or removed independently (up to 8). Subscriptions expired with HTTP 404/410 are removed automatically.
+- Payloads include at most the source, destination name and approximate country, **not visitor IDs, IPs or referrer URLs**.
+- Push subscriptions and settings are administrator-only and require same-origin writes; browser push endpoints are restricted to known providers to prevent SSRF.
+- The service worker does **not cache private pages or analytics data**. If your admin session expires, you still have to sign in.
+- Web Push itself does not require a paid provider, but Worker and D1 usage must stay within the Cloudflare free-tier limits; delivery is best-effort and can be limited by browser, Android battery/permission settings or network availability.
+
+### Troubleshooting
+
+If you see a D1 table error after upgrading, run the correct migration (`npm run db:local` for local development or `npm run db:remote` for production) **before launching the new Worker**. For missing push notifications, check the real HTTPS deployment, VAPID configuration, Android permissions and **Send test**. If you rotate VAPID keys, re-enable push on every device.

@@ -44,7 +44,7 @@ test('styled icon mode menu preserves all four choices and native form submissio
 });
 
 test('Appearance has no duplicate public-page button and full-width panel CSS',()=>{
-  const func=loadFunction('appearanceTab','renderAdmin',{state:{profile:{}},attr:escapeHTML,escapeHTML,monogram:()=> 'LH'});
+  const func=loadFunction('appearanceTab','deviceChoice',{state:{profile:{}},attr:escapeHTML,escapeHTML,monogram:()=> 'LH'});
   const markup=func();
   assert.match(markup,/class="dash-panel appearance-panel"/);
   assert.doesNotMatch(markup,/<a class="btn btn-outline" href="\/"/);

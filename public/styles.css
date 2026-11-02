@@ -229,3 +229,47 @@
 }
 
 .profile-cover .cover-photo {position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;}
+
+/* v0.5.0 — installable mobile admin and device-specific notification preferences */
+.mobile-section-switch{display:none}
+.notifications-layout{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-bottom:19px}
+.notification-intro{min-width:0}
+.notification-intro .panel-title-row{align-items:start}
+.notify-icon{width:43px;height:43px;display:grid;place-items:center;background:#e9efff;color:#4669d8;border-radius:13px;font-size:24px;flex:none}
+.install-state{display:flex;align-items:center;gap:9px;padding:15px 0 12px;font-size:13px;font-weight:750;color:#465a77}
+.notify-status-indicator{flex:none;width:9px;height:9px;border-radius:50%;background:#f0a04a;box-shadow:0 0 0 4px #fbe9d4}
+.notify-status-indicator.connected{background:#15a86b;box-shadow:0 0 0 4px #d7f5e8}
+.notification-actions{display:flex;align-items:center;flex-wrap:wrap;gap:11px;margin:14px 0}
+.notification-actions .btn{min-height:43px}
+.notification-hint{font-size:12px;line-height:1.75;color:#6b7d98;margin:11px 0 0}
+.notification-muted{font-size:12px;color:#6b7d98;line-height:1.5}
+.notification-form{display:grid;gap:22px;padding-top:18px}
+.notification-field{display:grid;gap:9px;font-size:12px;font-weight:800;color:#405474;min-width:0}
+.notification-field input,.notification-field select{min-height:46px;width:100%;border:1px solid #cad7e9;background:#f9fbff;border-radius:12px;color:#132646;padding:0 13px;font-size:14px;font-weight:650}
+.notification-field input:focus-visible,.notification-field select:focus-visible{outline:3px solid #b7cdff;outline-offset:2px}
+.notification-toggle-stack{display:grid;gap:9px}
+.notification-toggle{display:flex;align-items:center;gap:15px;min-height:68px;border:1px solid #dae4f1;border-radius:14px;padding:13px 16px;background:#fbfcff;cursor:pointer}
+.notification-toggle input{accent-color:#476ff0;flex:none;width:19px;height:19px}
+.notification-toggle span{display:grid;gap:5px}
+.notification-toggle strong{font-size:13px;color:#1b2e51}
+.notification-toggle small{font-size:12px;color:#677c99;line-height:1.5}
+.notification-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.notification-empty{padding:25px 18px;border-radius:14px;border:1px dashed #bdd0e9;background:#f9fbff;color:#627797;font-size:13px;text-align:center;margin-top:19px}
+@media(max-width:1080px){.notifications-layout{grid-template-columns:1fr}}
+@media(max-width:840px){
+  .sidebar{position:relative!important;z-index:30;overflow:visible!important;padding:14px 17px!important;gap:9px!important}
+  .sidebar-brand{margin:0!important;flex:1 1 auto;order:0}
+  .mobile-section-switch{display:flex;order:2;flex:1 0 100%;width:100%;align-items:center;justify-content:space-between;gap:15px;min-height:47px;padding:10px 15px;background:#293b5b;color:#fff;border:1px solid #4a6490;border-radius:12px;text-align:left;font-size:13px;font-weight:800}
+  .mobile-menu-chevron{display:grid;place-items:center;transition:transform .18s ease}
+  .sidebar.mobile-nav-open .mobile-menu-chevron{transform:rotate(180deg)}
+  .sidebar-nav{display:none!important;position:absolute;z-index:80;top:calc(100% - 5px);left:17px;right:17px;width:auto!important;max-height:min(68vh,440px);overflow-y:auto!important;overflow-x:hidden!important;flex-direction:column!important;gap:6px!important;padding:9px!important;border-radius:14px;border:1px solid #506787;background:#192945;box-shadow:0 22px 44px #0b1a3480}
+  .sidebar.mobile-nav-open .sidebar-nav{display:flex!important}
+  .sidebar-nav .nav-item{width:100%!important;white-space:normal!important;min-width:0!important;justify-content:flex-start!important;min-height:46px!important;text-align:left!important;flex:none!important}
+  .dashboard-shell,.dash-main{min-width:0}
+}
+@media(max-width:620px){
+  .notification-grid{grid-template-columns:1fr}
+  .notification-actions .btn{flex:1 1 auto}
+  .notification-toggle{padding:13px 12px}
+}
+@media(prefers-reduced-motion:reduce){.mobile-menu-chevron{transition:none}}
